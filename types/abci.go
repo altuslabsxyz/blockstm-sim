@@ -8,6 +8,21 @@ import (
 	storetypes "cosmossdk.io/store/types"
 )
 
+// ABCIHandlers aggregates all ABCI handlers needed for an application.
+type ABCIHandlers struct {
+	InitChainer
+	CheckTxHandler
+	PreBlocker
+	BeginBlocker
+	EndBlocker
+	ProcessProposalHandler
+	PrepareProposalHandler
+	ExtendVoteHandler
+	VerifyVoteExtensionHandler
+	PrepareCheckStater
+	Precommiter
+}
+
 // InitChainer initializes application state at genesis
 type InitChainer func(ctx Context, req *abci.RequestInitChain) (*abci.ResponseInitChain, error)
 
@@ -17,9 +32,6 @@ type PrepareCheckStater func(ctx Context)
 
 // Precommiter runs code during commit immediately before the `deliverState` is written to the `rootMultiStore`.
 type Precommiter func(ctx Context)
-
-// PeerFilter responds to p2p filtering queries from Tendermint
-type PeerFilter func(info string) *abci.ResponseQuery
 
 // ProcessProposalHandler defines a function type alias for processing a proposer
 type ProcessProposalHandler func(Context, *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error)
@@ -95,3 +107,6 @@ type DeliverTxFunc func(tx []byte, ms storetypes.MultiStore, txIndex int, incarn
 type TxRunner interface {
 	Run(ctx context.Context, ms storetypes.MultiStore, txs [][]byte, deliverTx DeliverTxFunc) ([]*abci.ExecTxResult, error)
 }
+
+// PeerFilter responds to p2p filtering queries from Tendermint
+type PeerFilter func(info string) *abci.ResponseQuery
