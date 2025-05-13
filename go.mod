@@ -181,6 +181,8 @@ require (
 
 replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.20-stable
 
+replace cosmossdk.io/store => ./store
+
 // Below are the long-lived replace of the Cosmos SDK
 replace (
 	// use cosmos fork of keyring
