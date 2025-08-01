@@ -39,9 +39,10 @@ func CreateContextWithErrorAndMode(err error, mode string) Context {
 // Test the correct code is returned when
 func TestBroadcastError(t *testing.T) {
 	errors := map[error]uint32{
-		mempool.ErrTxInCache:       sdkerrors.ErrTxInMempoolCache.ABCICode(),
-		mempool.ErrTxTooLarge{}:    sdkerrors.ErrTxTooLarge.ABCICode(),
-		mempool.ErrMempoolIsFull{}: sdkerrors.ErrMempoolIsFull.ABCICode(),
+		mempool.ErrTxInCache:                  sdkerrors.ErrTxInMempoolCache.ABCICode(),
+		mempool.ErrTxTooLarge{}:               sdkerrors.ErrTxTooLarge.ABCICode(),
+		mempool.ErrMempoolIsFull{}:            sdkerrors.ErrMempoolIsFull.ABCICode(),
+		mempool.ErrMempoolRateLimitExceeded{}: sdkerrors.ErrMempoolRateLimitExceeded.ABCICode(),
 	}
 
 	modes := []string{

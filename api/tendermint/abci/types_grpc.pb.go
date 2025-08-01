@@ -35,6 +35,8 @@ const (
 	ABCI_ExtendVote_FullMethodName          = "/tendermint.abci.ABCI/ExtendVote"
 	ABCI_VerifyVoteExtension_FullMethodName = "/tendermint.abci.ABCI/VerifyVoteExtension"
 	ABCI_FinalizeBlock_FullMethodName       = "/tendermint.abci.ABCI/FinalizeBlock"
+	ABCI_BeginRecheckTx_FullMethodName      = "/tendermint.abci.ABCI/BeginRecheckTx"
+	ABCI_EndRecheckTx_FullMethodName        = "/tendermint.abci.ABCI/EndRecheckTx"
 )
 
 // ABCIClient is the client API for ABCI service.
@@ -57,6 +59,8 @@ type ABCIClient interface {
 	ExtendVote(ctx context.Context, in *RequestExtendVote, opts ...grpc.CallOption) (*ResponseExtendVote, error)
 	VerifyVoteExtension(ctx context.Context, in *RequestVerifyVoteExtension, opts ...grpc.CallOption) (*ResponseVerifyVoteExtension, error)
 	FinalizeBlock(ctx context.Context, in *RequestFinalizeBlock, opts ...grpc.CallOption) (*ResponseFinalizeBlock, error)
+	BeginRecheckTx(ctx context.Context, in *RequestBeginRecheckTx, opts ...grpc.CallOption) (*ResponseBeginRecheckTx, error)
+	EndRecheckTx(ctx context.Context, in *RequestEndRecheckTx, opts ...grpc.CallOption) (*ResponseEndRecheckTx, error)
 }
 
 type aBCIClient struct {
@@ -227,6 +231,24 @@ func (c *aBCIClient) FinalizeBlock(ctx context.Context, in *RequestFinalizeBlock
 	return out, nil
 }
 
+func (c *aBCIClient) BeginRecheckTx(ctx context.Context, in *RequestBeginRecheckTx, opts ...grpc.CallOption) (*ResponseBeginRecheckTx, error) {
+	out := new(ResponseBeginRecheckTx)
+	err := c.cc.Invoke(ctx, ABCI_BeginRecheckTx_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aBCIClient) EndRecheckTx(ctx context.Context, in *RequestEndRecheckTx, opts ...grpc.CallOption) (*ResponseEndRecheckTx, error) {
+	out := new(ResponseEndRecheckTx)
+	err := c.cc.Invoke(ctx, ABCI_EndRecheckTx_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ABCIServer is the server API for ABCI service.
 // All implementations must embed UnimplementedABCIServer
 // for forward compatibility.
@@ -247,6 +269,8 @@ type ABCIServer interface {
 	ExtendVote(context.Context, *RequestExtendVote) (*ResponseExtendVote, error)
 	VerifyVoteExtension(context.Context, *RequestVerifyVoteExtension) (*ResponseVerifyVoteExtension, error)
 	FinalizeBlock(context.Context, *RequestFinalizeBlock) (*ResponseFinalizeBlock, error)
+	BeginRecheckTx(context.Context, *RequestBeginRecheckTx) (*ResponseBeginRecheckTx, error)
+	EndRecheckTx(context.Context, *RequestEndRecheckTx) (*ResponseEndRecheckTx, error)
 	mustEmbedUnimplementedABCIServer()
 }
 
@@ -304,6 +328,12 @@ func (UnimplementedABCIServer) VerifyVoteExtension(context.Context, *RequestVeri
 }
 func (UnimplementedABCIServer) FinalizeBlock(context.Context, *RequestFinalizeBlock) (*ResponseFinalizeBlock, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FinalizeBlock not implemented")
+}
+func (UnimplementedABCIServer) BeginRecheckTx(context.Context, *RequestBeginRecheckTx) (*ResponseBeginRecheckTx, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BeginRecheckTx not implemented")
+}
+func (UnimplementedABCIServer) EndRecheckTx(context.Context, *RequestEndRecheckTx) (*ResponseEndRecheckTx, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EndRecheckTx not implemented")
 }
 func (UnimplementedABCIServer) mustEmbedUnimplementedABCIServer() {}
 func (UnimplementedABCIServer) testEmbeddedByValue()              {}
@@ -614,6 +644,42 @@ func _ABCI_FinalizeBlock_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ABCI_BeginRecheckTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestBeginRecheckTx)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ABCIServer).BeginRecheckTx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ABCI_BeginRecheckTx_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ABCIServer).BeginRecheckTx(ctx, req.(*RequestBeginRecheckTx))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ABCI_EndRecheckTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestEndRecheckTx)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ABCIServer).EndRecheckTx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ABCI_EndRecheckTx_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ABCIServer).EndRecheckTx(ctx, req.(*RequestEndRecheckTx))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ABCI_ServiceDesc is the grpc.ServiceDesc for ABCI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -684,6 +750,14 @@ var ABCI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FinalizeBlock",
 			Handler:    _ABCI_FinalizeBlock_Handler,
+		},
+		{
+			MethodName: "BeginRecheckTx",
+			Handler:    _ABCI_BeginRecheckTx_Handler,
+		},
+		{
+			MethodName: "EndRecheckTx",
+			Handler:    _ABCI_EndRecheckTx_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

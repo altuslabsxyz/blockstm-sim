@@ -198,6 +198,11 @@ type BaseApp struct {
 	//
 	// SAFETY: it's safe to do if validators validate the total gas wanted in the `ProcessProposal`, which is the case in the default handler.
 	disableBlockGasMeter bool
+
+	// parallel checktx
+	checkStateMtx   sync.RWMutex
+	checkAccountWGs *AccountWGs
+	chCheckTx       chan *RequestCheckTxAsync
 }
 
 // NewBaseApp returns a reference to an initialized BaseApp. It accepts a
@@ -218,6 +223,8 @@ func NewBaseApp(
 		fauxMerkleMode:   false,
 		sigverifyTx:      true,
 		queryGasLimit:    math.MaxUint64,
+		checkAccountWGs:  NewAccountWGs(),
+		chCheckTx:        make(chan *RequestCheckTxAsync, 10000), // TODO config channel buffer size. It might be good to set it tendermint mempool.size
 	}
 
 	for _, option := range options {
@@ -263,6 +270,8 @@ func NewBaseApp(
 			logger.Warn("error validating merged proto registry annotations", "error", err)
 		}
 	}
+
+	app.startReactors()
 
 	return app
 }
@@ -508,6 +517,13 @@ func (app *BaseApp) setState(mode execMode, h cmtproto.Header) {
 
 	switch mode {
 	case execModeCheck:
+		// Acquire a lock to ensure thread-safe access to `checkState` during state updates.
+		// Since `CheckTxAsync` runs checkTx concurrently, this lock is necessary to
+		// prevent data races and ensure that updates to `checkState` remain consistent
+		// across all goroutines. Without this lock, concurrent modifications could
+		// lead to inconsistent application states or runtime errors.
+		app.checkStateMtx.Lock()
+		defer app.checkStateMtx.Unlock()
 		baseState.SetContext(baseState.Context().WithIsCheckTx(true).WithMinGasPrices(app.minGasPrices))
 		app.checkState = baseState
 
@@ -675,8 +691,14 @@ func (app *BaseApp) getBlockGasMeter(ctx sdk.Context) storetypes.GasMeter {
 
 // retrieve the context for the tx w/ txBytes and other memoized values.
 func (app *BaseApp) getContextForTx(mode execMode, txBytes []byte) sdk.Context {
-	app.mu.Lock()
-	defer app.mu.Unlock()
+	if mode == execModeCheck || mode == execModeReCheck {
+		// By introducing Parallel CheckTx, now getContextForTx can be called by multiple goroutines.
+		// Without this lock, multiple goroutines could attempt to modify or read `checkState` simultaneously,
+		// leading to inconsistent or corrupted state.
+		// The lock guarantees a consistent context is maintained across all CheckTx operations.
+		app.checkStateMtx.Lock()
+		defer app.checkStateMtx.Unlock()
+	}
 
 	modeState := app.getState(mode)
 	if modeState == nil {

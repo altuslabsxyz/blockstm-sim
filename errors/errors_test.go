@@ -258,4 +258,6 @@ var (
 	ErrNotSupported            = RegisterWithGRPCCode(testCodespace, 37, codes.Unimplemented, "feature not supported")
 	ErrNotFound                = RegisterWithGRPCCode(testCodespace, 38, codes.NotFound, "not found")
 	ErrIO                      = Register(testCodespace, 39, "Internal IO error")
+
+	ErrMempoolRateLimitExceeded = Register(testCodespace, 10001, "mempool rate limit exceeded")
 )

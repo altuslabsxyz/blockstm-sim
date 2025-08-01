@@ -14,7 +14,10 @@ type ABCI interface {
 	Query(context.Context, *abci.RequestQuery) (*abci.ResponseQuery, error) // Query for state
 
 	// Mempool Connection
-	CheckTx(*abci.RequestCheckTx) (*abci.ResponseCheckTx, error) // Validate a tx for the mempool
+	CheckTxSync(*abci.RequestCheckTx) (*abci.ResponseCheckTx, error)                  // Validate a tx for the mempool
+	CheckTxAsync(*abci.RequestCheckTx, abci.CheckTxCallback)                          // Asynchronously validate a tx for the mempool
+	BeginRecheckTx(*abci.RequestBeginRecheckTx) (*abci.ResponseBeginRecheckTx, error) // Signals the beginning of rechecking
+	EndRecheckTx(*abci.RequestEndRecheckTx) (*abci.ResponseEndRecheckTx, error)       // Signals the end of rechecking
 
 	// Consensus Connection
 	InitChain(*abci.RequestInitChain) (*abci.ResponseInitChain, error) // Initialize blockchain w validators/other info from CometBFT

@@ -145,4 +145,8 @@ var (
 	// ErrTxTimeout defines an error for when a tx is rejected out due to an
 	// explicitly set timeout timestamp.
 	ErrTxTimeout = errorsmod.Register(RootCodespace, 42, "tx timeout")
+
+	// ErrMempoolRateLimitExceeded defines an error when the mempool rate limit is exceeded.
+	// Starting at 10001 for future errors added in the cosmos-sdk.
+	ErrMempoolRateLimitExceeded = errorsmod.Register(RootCodespace, 10001, "mempool rate limit exceeded")
 )

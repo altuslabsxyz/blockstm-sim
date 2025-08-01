@@ -223,6 +223,8 @@ require (
 // 	<temporary replace>
 // )
 
+replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.18-stable
+
 // Below are the long-lived replace for tests.
 replace (
 	// We always want to test against the latest version of the simapp.

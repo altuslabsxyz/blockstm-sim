@@ -227,6 +227,8 @@ require (
 // 	<temporary replace>
 // )
 
+replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.18-stable
+
 // Below are the long-lived replace of the SimApp
 replace (
 	// use cosmos fork of keyring

@@ -78,6 +78,13 @@ func CheckCometError(err error, tx cmttypes.Tx) *sdk.TxResponse {
 			TxHash:    txHash,
 		}
 
+	case strings.Contains(errStr, "mempool rate limit exceeded"):
+		return &sdk.TxResponse{
+			Code:      sdkerrors.ErrMempoolRateLimitExceeded.ABCICode(),
+			Codespace: sdkerrors.ErrMempoolRateLimitExceeded.Codespace(),
+			TxHash:    txHash,
+		}
+
 	default:
 		return nil
 	}

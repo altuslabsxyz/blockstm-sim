@@ -337,7 +337,7 @@ func (app *BaseApp) ApplySnapshotChunk(req *abci.RequestApplySnapshotChunk) (*ab
 // internal CheckTx state if the AnteHandler passes. Otherwise, the ResponseCheckTx
 // will contain relevant error information. Regardless of tx execution outcome,
 // the ResponseCheckTx will contain relevant gas execution context.
-func (app *BaseApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, error) {
+func (app *BaseApp) CheckTxSync(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, error) {
 	var mode execMode
 
 	switch req.Type {
@@ -350,6 +350,16 @@ func (app *BaseApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, er
 	default:
 		return nil, fmt.Errorf("unknown RequestCheckTx type: %s", req.Type)
 	}
+
+	tx, err := app.txDecoder(req.Tx)
+	if err != nil {
+		return sdkerrors.ResponseCheckTxWithEvents(err, 0, 0, nil, false), err
+	}
+
+	waits, signals := app.checkAccountWGs.Register(app.cdc, tx)
+
+	waitWgs(waits)
+	defer app.checkAccountWGs.Done(signals)
 
 	if app.checkTxHandler == nil {
 		gInfo, result, anteEvents, err := app.runTx(mode, req.Tx, nil)
@@ -372,6 +382,34 @@ func (app *BaseApp) CheckTx(req *abci.RequestCheckTx) (*abci.ResponseCheckTx, er
 	}
 
 	return app.checkTxHandler(runTx, req)
+}
+
+func (app *BaseApp) CheckTxAsync(req *abci.RequestCheckTx, callback abci.CheckTxCallback) {
+	if req.Type != abci.CheckTxType_New && req.Type != abci.CheckTxType_Recheck {
+		panic(fmt.Sprintf("unknown RequestCheckTx type: %s", req.Type))
+	}
+
+	reqCheckTx := &RequestCheckTxAsync{
+		txBytes:  req.Tx,
+		txType:   req.Type,
+		callback: callback,
+		prepare:  waitGroup1(),
+	}
+	app.chCheckTx <- reqCheckTx
+
+	go app.prepareCheckTx(reqCheckTx)
+}
+
+// BeginRecheckTx implements the ABCI interface and set the check state based on the given header
+func (app *BaseApp) BeginRecheckTx(req *abci.RequestBeginRecheckTx) (*abci.ResponseBeginRecheckTx, error) {
+	// NOTE: This is safe because CometBFT holds a lock on the mempool for Rechecking.
+	app.setState(execModeCheck, req.Header)
+	return &abci.ResponseBeginRecheckTx{Code: abci.CodeTypeOK}, nil
+}
+
+// EndRecheckTx implements the ABCI interface.
+func (app *BaseApp) EndRecheckTx(req *abci.RequestEndRecheckTx) (*abci.ResponseEndRecheckTx, error) {
+	return &abci.ResponseEndRecheckTx{Code: abci.CodeTypeOK}, nil
 }
 
 // PrepareProposal implements the PrepareProposal ABCI method and returns a
@@ -1239,6 +1277,7 @@ func (app *BaseApp) CreateQueryContextWithCheckHeader(height int64, prove, check
 
 	var header *cmtproto.Header
 	isLatest := height == 0
+	app.checkStateMtx.RLock()
 	for _, state := range []*state{
 		app.checkState,
 		app.finalizeBlockState,
@@ -1255,6 +1294,7 @@ func (app *BaseApp) CreateQueryContextWithCheckHeader(height int64, prove, check
 			}
 		}
 	}
+	app.checkStateMtx.RUnlock()
 
 	if header == nil {
 		return sdk.Context{},
