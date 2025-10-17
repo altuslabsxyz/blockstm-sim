@@ -175,7 +175,7 @@ require (
 // 	<temporary replace>
 // )
 
-replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.18-stable
+replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.19-stable-0
 
 // Below are the long-lived replace of the Cosmos SDK
 replace (
