@@ -162,8 +162,8 @@ jobs:
           path: ./tests/e2e-profile.out
 
   repo-analysis:
-    runs-on: ubuntu-latest
-    needs: [tests, test-integration, test-e2e]
+    runs-on: depot-ubuntu-22.04-4
+    needs: [tests, test-integration, test-e2e, test-clientv2, test-core, test-depinject, test-errors, test-math, test-schema, test-collections, test-cosmovisor, test-confix, test-store, test-log, test-x-tx, test-tools-benchmark]
     steps:
       - uses: actions/checkout@v4
       - uses: technote-space/get-diff-action@v6.1.2
@@ -200,6 +200,79 @@ jobs:
         with:
           name: "${{ github.sha }}-e2e-coverage"
         continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-clientv2-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-core-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-depinject-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-errors-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-math-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-schema-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-collections-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-cosmovisor-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-confix-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-store-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-log-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-x-tx-coverage"
+        continue-on-error: true
+      - uses: actions/download-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-tools-benchmark-coverage"
+        continue-on-error: true
+      - name: Upload coverage to Codecov
+        if: env.GIT_DIFF
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./00profile.out,./01profile.out,./02profile.out,./03profile.out,./integration-profile.out,./e2e-profile.out,./client/v2/coverage.out,./core/coverage.out,./depinject/coverage.out,./errors/coverage.out,./math/coverage.out,./schema/coverage.out,./collections/coverage.out,./tools/cosmovisor/coverage.out,./tools/confix/coverage.out,./store/coverage.out,./log/coverage.out,./x/tx/coverage.out,./tools/benchmark/coverage.out
+          fail_ci_if_error: false
+          verbose: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   test-sim-nondeterminism:
     runs-on: ubuntu-latest
@@ -260,6 +333,11 @@ jobs:
         run: |
           cd client/v2
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-clientv2-coverage"
+          path: ./client/v2/coverage.out
 
   test-core:
     runs-on: ubuntu-latest
@@ -283,6 +361,11 @@ jobs:
         run: |
           cd core
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-core-coverage"
+          path: ./core/coverage.out
 
   test-depinject:
     runs-on: ubuntu-latest
@@ -306,6 +389,11 @@ jobs:
         run: |
           cd depinject
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-depinject-coverage"
+          path: ./depinject/coverage.out
 
   test-errors:
     runs-on: ubuntu-latest
@@ -329,6 +417,11 @@ jobs:
         run: |
           cd errors
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-errors-coverage"
+          path: ./errors/coverage.out
 
   test-math:
     runs-on: ubuntu-latest
@@ -352,6 +445,11 @@ jobs:
         run: |
           cd math
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-math-coverage"
+          path: ./math/coverage.out
 
   test-schema:
     runs-on: ubuntu-latest
@@ -374,6 +472,11 @@ jobs:
         run: |
           cd schema
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-schema-coverage"
+          path: ./schema/coverage.out
 
   test-collections:
     runs-on: ubuntu-latest
@@ -397,6 +500,11 @@ jobs:
         run: |
           cd collections
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-collections-coverage"
+          path: ./collections/coverage.out
 
   test-cosmovisor:
     runs-on: ubuntu-latest
@@ -420,6 +528,11 @@ jobs:
         run: |
           cd tools/cosmovisor
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-cosmovisor-coverage"
+          path: ./tools/cosmovisor/coverage.out
 
   test-confix:
     runs-on: ubuntu-latest
@@ -443,6 +556,11 @@ jobs:
         run: |
           cd tools/confix
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-confix-coverage"
+          path: ./tools/confix/coverage.out
 
   test-store:
     runs-on: ubuntu-latest
@@ -467,6 +585,11 @@ jobs:
           cd store
           (cd streaming/abci/examples/file && go build .)
           go test -ldflags "-r /usr/local/lib" -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-store-coverage"
+          path: ./store/coverage.out
 
   test-log:
     runs-on: ubuntu-latest
@@ -490,6 +613,11 @@ jobs:
         run: |
           cd log
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-log-coverage"
+          path: ./log/coverage.out
 
   #############################
   ### Cosmos SDK x/{module} ###
@@ -520,6 +648,11 @@ jobs:
         run: |
           cd x/tx
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace ledger test_ledger_mock' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-x-tx-coverage"
+          path: ./x/tx/coverage.out
 
   test-x-nft:
     runs-on: ubuntu-latest
@@ -658,3 +791,8 @@ jobs:
         run: |
           cd tools/benchmark
           go test -mod=readonly -timeout 30m -coverprofile=coverage.out -covermode=atomic -tags='norace' ./...
+      - uses: actions/upload-artifact@v4
+        if: env.GIT_DIFF
+        with:
+          name: "${{ github.sha }}-tools-benchmark-coverage"
+          path: ./tools/benchmark/coverage.out
