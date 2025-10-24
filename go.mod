@@ -1,4 +1,4 @@
-go 1.23.2
+go 1.25.0
 
 module github.com/cosmos/cosmos-sdk
 
@@ -132,7 +132,6 @@ require (
 	github.com/minio/highwayhash v1.0.3 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nxadm/tail v1.4.11 // indirect
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -175,13 +174,9 @@ require (
 
 // Here are the short-lived replace from the Cosmos SDK
 // Replace here are pending PRs, or version to be tagged
-// replace (
-// 	<temporary replace>
-// )
+replace cosmossdk.io/store => ./store
 
 replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.20-stable
-
-replace cosmossdk.io/store => ./store
 
 // Below are the long-lived replace of the Cosmos SDK
 replace (
@@ -198,8 +193,6 @@ replace (
 	// BlockSTM requires patches to the btree package
 	github.com/tidwall/btree => github.com/cosmos/btree v0.0.0-20250924232609-2c6195d95951
 )
-
-replace cosmossdk.io/store => ./store
 
 retract (
 	// incorrect tag for patch version
