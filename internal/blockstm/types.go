@@ -7,6 +7,7 @@ import (
 const (
 	TelemetrySubsystem = "blockstm"
 	KeyExecutedTxs     = "executed_txs"
+	KeyTryExecuteTime  = "try_execute_time"
 	KeyValidatedTxs    = "validated_txs"
 	KeyDecreaseCount   = "decrease_count"
 	KeyExecutionRatio  = "execution_ratio"
@@ -29,7 +30,6 @@ const (
 	KeyMVViewEstimateWait    = "mvview_estimate_wait"
 
 	// Executor/Transaction Metrics
-
 	KeyTxReadCount        = "tx_read_count"
 	KeyTxWriteCount       = "tx_write_count"
 	KeyTxNewLocationWrite = "tx_new_location_write"
@@ -109,4 +109,5 @@ type MVView interface {
 
 	ApplyWriteSet(TxnVersion) bool
 	ReadSet() *ReadSet
+	WriteCount() int
 }
