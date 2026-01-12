@@ -64,6 +64,7 @@ type Context struct {
 	streamingManager     storetypes.StreamingManager
 	cometInfo            comet.BlockInfo
 	headerInfo           header.Info
+	stateDB              interface{}
 }
 
 // Proposed rename, not done to avoid API breakage
@@ -92,6 +93,7 @@ func (c Context) TransientKVGasConfig() storetypes.GasConfig    { return c.trans
 func (c Context) StreamingManager() storetypes.StreamingManager { return c.streamingManager }
 func (c Context) CometInfo() comet.BlockInfo                    { return c.cometInfo }
 func (c Context) HeaderInfo() header.Info                       { return c.headerInfo }
+func (c Context) StateDB() interface{}                          { return c.stateDB }
 
 // BlockHeader returns the header by value.
 func (c Context) BlockHeader() cmtproto.Header {
@@ -333,6 +335,11 @@ func (c Context) Value(key any) any {
 	}
 
 	return c.baseCtx.Value(key)
+}
+
+func (c Context) WithStateDB(stateDB interface{}) Context {
+	c.stateDB = stateDB
+	return c
 }
 
 // ----------------------------------------------------------------------------

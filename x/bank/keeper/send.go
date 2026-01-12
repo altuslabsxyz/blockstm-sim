@@ -47,6 +47,9 @@ type SendKeeper interface {
 	GetBlockedAddresses() map[string]bool
 
 	GetAuthority() string
+
+	SetERC20Transfer(transfer types.ERC20TransferFn)
+	SetERC20BalanceOf(balanceOf types.ERC20BalanceOfFn)
 }
 
 var _ SendKeeper = (*BaseSendKeeper)(nil)
@@ -196,12 +199,33 @@ func (k BaseSendKeeper) InputOutputCoins(ctx context.Context, input types.Input,
 		}
 	}
 
+	params := k.GetParams(ctx)
+	if params.Erc20GasToken != nil {
+		found, coin := input.Coins.Find(params.Erc20GasToken.Denom)
+		if found {
+			input.Coins = input.Coins.Sub(coin)
+		}
+	}
+
 	if err := k.subUnlockedCoins(ctx, inAddress, input.Coins); err != nil {
 		return err
 	}
 
 	for _, out := range sending {
-		if err := k.addCoins(ctx, out.Address, out.Coins); err != nil {
+		outCoins := out.Coins
+		if params.Erc20GasToken != nil {
+			found, coin := out.Coins.Find(params.Erc20GasToken.Denom)
+			if found {
+				err = k.erc20Executor.ExecuteTransfer(ctx, params.Erc20GasToken.Erc20ContractAddress, sdk.AccAddress(inAddress), sdk.AccAddress(out.Address), coin.Amount)
+				if err != nil {
+					return err
+				}
+
+				outCoins = outCoins.Sub(coin)
+			}
+		}
+
+		if err := k.addCoins(ctx, out.Address, outCoins); err != nil {
 			return err
 		}
 		sdkCtx.EventManager().EmitEvent(
@@ -230,12 +254,25 @@ func (k BaseSendKeeper) SendCoins(ctx context.Context, fromAddr, toAddr sdk.AccA
 		return err
 	}
 
-	err = k.subUnlockedCoins(ctx, fromAddr, amt)
+	amtNative := amt
+	params := k.GetParams(ctx)
+	if params.Erc20GasToken != nil {
+		if ok, erc20 := amt.Find(params.Erc20GasToken.Denom); ok {
+			err = k.erc20Executor.ExecuteTransfer(ctx, params.Erc20GasToken.Erc20ContractAddress, fromAddr, toAddr, erc20.Amount)
+			if err != nil {
+				return err
+			}
+
+			amtNative = amt.Sub(erc20)
+		}
+	}
+
+	err = k.subUnlockedCoins(ctx, fromAddr, amtNative)
 	if err != nil {
 		return err
 	}
 
-	err = k.addCoins(ctx, toAddr, amt)
+	err = k.addCoins(ctx, toAddr, amtNative)
 	if err != nil {
 		return err
 	}

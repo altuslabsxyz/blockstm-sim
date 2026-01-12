@@ -77,6 +77,7 @@ func TestMigrateJSON(t *testing.T) {
 	"denom_metadata": [],
 	"params": {
 		"default_send_enabled": false,
+		"erc20_gas_token": null,
 		"send_enabled": []
 	},
 	"send_enabled": [],

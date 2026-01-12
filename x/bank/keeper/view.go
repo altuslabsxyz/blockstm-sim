@@ -67,6 +67,8 @@ type BaseViewKeeper struct {
 	SendEnabled   collections.Map[string, bool]
 	Balances      *collections.IndexedMap[collections.Pair[sdk.AccAddress, string], math.Int, BalancesIndexes]
 	Params        collections.Item[types.Params]
+
+	erc20Executor *erc20Executor
 }
 
 // NewBaseViewKeeper returns a new BaseViewKeeper.
@@ -82,6 +84,7 @@ func NewBaseViewKeeper(cdc codec.BinaryCodec, storeService store.KVStoreService,
 		SendEnabled:   collections.NewMap(sb, types.SendEnabledPrefix, "send_enabled", collections.StringKey, codec.BoolValue), // NOTE: we use a bool value which uses protobuf to retain state backwards compat
 		Balances:      collections.NewIndexedMap(sb, types.BalancesPrefix, "balances", collections.PairKeyCodec(sdk.AccAddressKey, collections.StringKey), types.BalanceValueCodec, newBalancesIndexes(sb)),
 		Params:        collections.NewItem(sb, types.ParamsKey, "params", codec.CollValue[types.Params](cdc)),
+		erc20Executor: newERC20Executor(),
 	}
 
 	schema, err := sb.Build()
@@ -105,6 +108,16 @@ func (k BaseViewKeeper) Logger() log.Logger {
 // GetAllBalances returns all the account balances for the given account address.
 func (k BaseViewKeeper) GetAllBalances(ctx context.Context, addr sdk.AccAddress) sdk.Coins {
 	balances := sdk.NewCoins()
+
+	params, _ := k.Params.Get(ctx)
+	if params.Erc20GasToken != nil {
+		denom := params.Erc20GasToken.Denom
+		erc20Balance, err := k.erc20Executor.ExecuteBalanceOf(ctx, params.Erc20GasToken.Erc20ContractAddress, addr)
+		if err == nil {
+			balances = balances.Add(sdk.NewCoin(denom, erc20Balance))
+		}
+	}
+
 	k.IterateAccountBalances(ctx, addr, func(balance sdk.Coin) bool {
 		balances = balances.Add(balance)
 		return false
@@ -142,6 +155,15 @@ func (k BaseViewKeeper) GetAccountsBalances(ctx context.Context) []types.Balance
 // GetBalance returns the balance of a specific denomination for a given account
 // by address.
 func (k BaseViewKeeper) GetBalance(ctx context.Context, addr sdk.AccAddress, denom string) sdk.Coin {
+	params, _ := k.Params.Get(ctx)
+	if params.Erc20GasToken != nil && params.Erc20GasToken.Denom == denom {
+		erc20Balance, err := k.erc20Executor.ExecuteBalanceOf(ctx, params.Erc20GasToken.Erc20ContractAddress, addr)
+		if err != nil {
+			return sdk.NewCoin(denom, math.ZeroInt())
+		}
+		return sdk.NewCoin(denom, erc20Balance)
+	}
+
 	amt, err := k.Balances.Get(ctx, collections.Join(addr, denom))
 	if err != nil {
 		return sdk.NewCoin(denom, math.ZeroInt())
@@ -152,7 +174,7 @@ func (k BaseViewKeeper) GetBalance(ctx context.Context, addr sdk.AccAddress, den
 // IterateAccountBalances iterates over the balances of a single account and
 // provides the token balance to a callback. If true is returned from the
 // callback, iteration is halted.
-func (k BaseViewKeeper) IterateAccountBalances(ctx context.Context, addr sdk.AccAddress, cb func(sdk.Coin) bool) {
+func (k BaseViewKeeper) IterateAccountBalances(ctx context.Context, addr sdk.AccAddress, cb func(sdk.Coin) bool) { // !
 	err := k.Balances.Walk(ctx, collections.NewPrefixedPairRange[sdk.AccAddress, string](addr), func(key collections.Pair[sdk.AccAddress, string], value math.Int) (stop bool, err error) {
 		return cb(sdk.NewCoin(key.K2(), value)), nil
 	})

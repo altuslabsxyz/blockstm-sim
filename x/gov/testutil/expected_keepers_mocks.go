@@ -864,6 +864,30 @@ func (mr *MockBankKeeperMockRecorder) SetDenomMetaData(ctx, denomMetaData any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDenomMetaData", reflect.TypeOf((*MockBankKeeper)(nil).SetDenomMetaData), ctx, denomMetaData)
 }
 
+// SetERC20BalanceOf mocks base method.
+func (m *MockBankKeeper) SetERC20BalanceOf(balanceOf types0.ERC20BalanceOfFn) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetERC20BalanceOf", balanceOf)
+}
+
+// SetERC20BalanceOf indicates an expected call of SetERC20BalanceOf.
+func (mr *MockBankKeeperMockRecorder) SetERC20BalanceOf(balanceOf any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetERC20BalanceOf", reflect.TypeOf((*MockBankKeeper)(nil).SetERC20BalanceOf), balanceOf)
+}
+
+// SetERC20Transfer mocks base method.
+func (m *MockBankKeeper) SetERC20Transfer(transfer types0.ERC20TransferFn) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetERC20Transfer", transfer)
+}
+
+// SetERC20Transfer indicates an expected call of SetERC20Transfer.
+func (mr *MockBankKeeperMockRecorder) SetERC20Transfer(transfer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetERC20Transfer", reflect.TypeOf((*MockBankKeeper)(nil).SetERC20Transfer), transfer)
+}
+
 // SetParams mocks base method.
 func (m *MockBankKeeper) SetParams(ctx context.Context, params types0.Params) error {
 	m.ctrl.T.Helper()

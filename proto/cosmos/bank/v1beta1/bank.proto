@@ -19,6 +19,8 @@ message Params {
   // As of cosmos-sdk 0.47, this only exists for backwards compatibility of genesis files.
   repeated SendEnabled send_enabled         = 1 [deprecated = true];
   bool                 default_send_enabled = 2;
+
+  ERC20GasToken erc20_gas_token = 1000;
 }
 
 // SendEnabled maps coin denom to a send_enabled status (whether a denom is
@@ -27,6 +29,12 @@ message SendEnabled {
   option (gogoproto.equal) = true;
   string denom             = 1;
   bool   enabled           = 2;
+}
+
+// ERC20GasToken is a token that is used to pay for gas on the ERC20 chain.
+message ERC20GasToken {
+  string denom                  = 1;
+  string erc20_contract_address = 2;
 }
 
 // Input models transaction input.
