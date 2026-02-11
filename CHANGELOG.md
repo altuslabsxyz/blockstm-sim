@@ -55,6 +55,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 * (server) [#25740](https://github.com/cosmos/cosmos-sdk/pull/25740) Add variadic `grpc.DialOption` parameter to `StartGrpcServer` for custom gRPC client connection options.
 * (blockstm) [#25765](https://github.com/cosmos/cosmos-sdk/pull/25765) Minor code readability improvement in block-stm.
 * (blockstm) [#25786](https://github.com/cosmos/cosmos-sdk/pull/25786) Add pre-state checking in transaction state transition.
+* (blockstm) [25883](https://github.com/cosmos/cosmos-sdk/pull/25883) Re-use decoded tx object in pre-estimates.
 
 ### Bug Fixes
 

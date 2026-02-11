@@ -112,7 +112,7 @@ func TestSTMRunner_Run_EmptyBlock(t *testing.T) {
 		StoreKeyBank: 1,
 	})}
 
-	deliverTx := func(tx []byte, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
+	deliverTx := func(tx []byte, memTx sdk.Tx, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
 		t.Fatal("deliverTx should not be called for empty block")
 		return nil
 	}
@@ -143,7 +143,7 @@ func TestSTMRunner_Run_WithoutEstimation(t *testing.T) {
 	}
 
 	executionCount := atomic.Int32{}
-	deliverTx := func(tx []byte, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
+	deliverTx := func(tx []byte, memTx sdk.Tx, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
 		executionCount.Add(1)
 		require.NotNil(t, ms)
 		return &abci.ExecTxResult{Code: 0}
@@ -179,7 +179,7 @@ func TestSTMRunner_Run_WithEstimation(t *testing.T) {
 	}
 
 	executionCount := atomic.Int32{}
-	deliverTx := func(tx []byte, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
+	deliverTx := func(tx []byte, memTx sdk.Tx, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
 		executionCount.Add(1)
 		require.NotNil(t, ms)
 		return &abci.ExecTxResult{Code: 0}
@@ -210,7 +210,7 @@ func TestSTMRunner_Run_IncarnationCache(t *testing.T) {
 	}
 
 	cacheReceived := make([]bool, len(txs))
-	deliverTx := func(tx []byte, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
+	deliverTx := func(tx []byte, memTx sdk.Tx, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
 		if cache != nil {
 			cacheReceived[txIndex] = true
 		}
@@ -242,7 +242,7 @@ func TestSTMRunner_Run_StoreIndexMapping(t *testing.T) {
 
 	txs := [][]byte{{0x01}}
 
-	deliverTx := func(tx []byte, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
+	deliverTx := func(tx []byte, memTx sdk.Tx, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
 		// Verify we can access both stores
 		authStore := ms.GetKVStore(StoreKeyAuth)
 		bankStore := ms.GetKVStore(StoreKeyBank)
@@ -278,7 +278,7 @@ func TestSTMRunner_Run_ContextCancellation(t *testing.T) {
 		txs[i] = []byte{byte(i % 256)}
 	}
 
-	deliverTx := func(tx []byte, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
+	deliverTx := func(tx []byte, memTx sdk.Tx, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
 		time.Sleep(1 * time.Millisecond) // Slow down execution
 		return &abci.ExecTxResult{Code: 0}
 	}
@@ -451,7 +451,7 @@ func TestSTMRunner_Integration(t *testing.T) {
 
 	// Use STMRunner to execute
 	var results []*abci.ExecTxResult
-	deliverTx := func(tx []byte, mstore storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
+	deliverTx := func(tx []byte, _ sdk.Tx, mstore storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
 		// Execute using the mock block's transaction logic
 		if txIndex < blk.Size() {
 			// Convert multistore wrapper to MultiStore for block execution
