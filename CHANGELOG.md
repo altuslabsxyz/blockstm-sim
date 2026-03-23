@@ -38,6 +38,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## UNRELEASED
 
+### Breaking Changes
+
+* (baseapp) [#26138](https://github.com/cosmos/cosmos-sdk/pull/26138) Default block gas meter to disabled. Adds checking to ensure block gas meter is not enabled while bstm parallel execution is configured and panics in these scenarios during parameter assignment.
+
 ### Features
 
 * (crypto/ledger) [#25435](https://github.com/cosmos/cosmos-sdk/pull/25435) Add SetDERConversion to reset skipDERConversion and App name for ledger.
