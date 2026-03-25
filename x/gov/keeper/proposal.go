@@ -155,8 +155,15 @@ func (k Keeper) CancelProposal(ctx context.Context, proposalID uint64, proposer 
 		return types.ErrInvalidProposal.Wrap("proposal should be in the deposit or voting period")
 	}
 
-	// Check proposal voting period is ended.
-	if proposal.VotingEndTime != nil && proposal.VotingEndTime.Before(sdkCtx.BlockTime()) {
+	blockTime := sdkCtx.BlockTime()
+
+	// Check proposal deposit period is ended (deadline block included).
+	if proposal.Status == v1.StatusDepositPeriod && proposal.DepositEndTime != nil && !proposal.DepositEndTime.After(blockTime) {
+		return types.ErrInvalidProposal.Wrapf("deposit period is already ended for this proposal %d", proposalID)
+	}
+
+	// Check proposal voting period is ended (deadline block included).
+	if proposal.Status == v1.StatusVotingPeriod && proposal.VotingEndTime != nil && !proposal.VotingEndTime.After(blockTime) {
 		return types.ErrVotingPeriodEnded.Wrapf("voting period is already ended for this proposal %d", proposalID)
 	}
 

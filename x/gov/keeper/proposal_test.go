@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -292,6 +293,66 @@ func (suite *KeeperTestSuite) TestCancelProposal() {
 	votes, err := suite.govKeeper.Votes.Get(suite.ctx, collections.Join(proposal3ID, suite.addrs[0]))
 	suite.Require().NoError(err)
 	suite.Require().NotNil(votes)
+}
+
+func (suite *KeeperTestSuite) TestCancelProposalDeadlineBlock() {
+	govAcct := suite.govKeeper.GetGovernanceAccount(suite.ctx).GetAddress().String()
+	tp := v1beta1.TextProposal{Title: "deadline", Description: "deadline"}
+	prop, err := v1.NewLegacyContent(&tp, govAcct)
+	suite.Require().NoError(err)
+
+	// --- Deposit-period deadline case ---
+	depositProposal, err := suite.govKeeper.SubmitProposal(suite.ctx, []sdk.Msg{prop}, "", "title", "summary", suite.addrs[0], false)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(depositProposal.DepositEndTime)
+
+	deadline := *depositProposal.DepositEndTime
+
+	// Move block time to the exact deposit end time (deadline block).
+	suite.ctx = suite.ctx.WithBlockTime(deadline)
+
+	// Cancellation at deposit deadline must be rejected.
+	err = suite.govKeeper.CancelProposal(suite.ctx, depositProposal.Id, suite.addrs[0].String())
+	suite.Require().Error(err)
+	suite.Require().ErrorContains(err, "deposit period is already ended")
+
+	// Proposal must still exist (not deleted).
+	_, err = suite.govKeeper.Proposals.Get(suite.ctx, depositProposal.Id)
+	suite.Require().NoError(err)
+
+	// Cancellation one second before deposit deadline must succeed.
+	suite.ctx = suite.ctx.WithBlockTime(deadline.Add(-1 * time.Second))
+	err = suite.govKeeper.CancelProposal(suite.ctx, depositProposal.Id, suite.addrs[0].String())
+	suite.Require().NoError(err)
+
+	// --- Voting-period deadline case ---
+	suite.ctx = suite.ctx.WithBlockTime(deadline.Add(-1 * time.Second)) // reset to before deadline
+	votingProposal, err := suite.govKeeper.SubmitProposal(suite.ctx, []sdk.Msg{prop}, "", "title", "summary", suite.addrs[1], false)
+	suite.Require().NoError(err)
+	suite.Require().NoError(suite.govKeeper.ActivateVotingPeriod(suite.ctx, votingProposal))
+
+	votingProposal, err = suite.govKeeper.Proposals.Get(suite.ctx, votingProposal.Id)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(votingProposal.VotingEndTime)
+
+	votingDeadline := *votingProposal.VotingEndTime
+
+	// Move block time to the exact voting end time (deadline block).
+	suite.ctx = suite.ctx.WithBlockTime(votingDeadline)
+
+	// Cancellation at voting deadline must be rejected.
+	err = suite.govKeeper.CancelProposal(suite.ctx, votingProposal.Id, suite.addrs[1].String())
+	suite.Require().Error(err)
+	suite.Require().ErrorContains(err, "voting period is already ended")
+
+	// Proposal must still exist (not deleted).
+	_, err = suite.govKeeper.Proposals.Get(suite.ctx, votingProposal.Id)
+	suite.Require().NoError(err)
+
+	// Cancellation one second before voting deadline must succeed.
+	suite.ctx = suite.ctx.WithBlockTime(votingDeadline.Add(-1 * time.Second))
+	err = suite.govKeeper.CancelProposal(suite.ctx, votingProposal.Id, suite.addrs[1].String())
+	suite.Require().NoError(err)
 }
 
 func TestMigrateProposalMessages(t *testing.T) {
