@@ -189,6 +189,8 @@ func NewBaseApp(
 		fauxMerkleMode:       false,
 		sigverifyTx:          true,
 		gasConfig:            config.GasConfig{QueryGasLimit: math.MaxUint64},
+		checkAccountWGs:      NewAccountWGs(),
+		chCheckTx:            make(chan *RequestCheckTxAsync, 10000), // TODO config channel buffer size. It might be good to set it tendermint mempool.size
 		disableBlockGasMeter: true,
 	}
 
