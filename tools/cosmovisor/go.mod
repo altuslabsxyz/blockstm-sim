@@ -211,6 +211,8 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
+replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.20-stable
+
 replace (
 	cosmossdk.io/store => ../../store
 	cosmossdk.io/x/tx => ../../x/tx
