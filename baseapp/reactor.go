@@ -53,7 +53,7 @@ func (app *BaseApp) checkTxAsync(req *RequestCheckTxAsync, waits []*sync.WaitGro
 	waitWgs(waits)
 	defer app.checkAccountWGs.Done(signals)
 
-	var mode execMode
+	var mode sdk.ExecMode
 	if req.txType == abci.CheckTxType_New {
 		mode = execModeCheck
 	} else if req.txType == abci.CheckTxType_Recheck {
@@ -62,7 +62,7 @@ func (app *BaseApp) checkTxAsync(req *RequestCheckTxAsync, waits []*sync.WaitGro
 		panic(fmt.Sprintf("unknown RequestCheckTx type: %s", req.txType))
 	}
 
-	gInfo, result, anteEvents, err := app.runTx(mode, req.txBytes, req.tx)
+	gInfo, result, anteEvents, err := app.RunTx(mode, req.txBytes, req.tx, -1, nil, nil)
 	if err != nil {
 		req.callback(sdkerrors.ResponseCheckTxWithEvents(err, gInfo.GasWanted, gInfo.GasUsed, anteEvents, app.trace))
 		return
