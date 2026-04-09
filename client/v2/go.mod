@@ -175,3 +175,5 @@ replace (
 	cosmossdk.io/store => ../../store
 	github.com/cosmos/cosmos-sdk => ../../.
 )
+
+replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.20-stable
