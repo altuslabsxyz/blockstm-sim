@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 
-	"cosmossdk.io/log/v2"
+	"cosmossdk.io/log"
 	"cosmossdk.io/math"
 	"cosmossdk.io/simapp"
 
@@ -135,6 +135,7 @@ func buildGenesisState(t *testing.T, accounts []account) ([]byte, *cmttypes.Vali
 	templateApp := simapp.NewSimApp(
 		log.NewNopLogger(),
 		dbm.NewMemDB(),
+		nil,
 		true,
 		simtestutil.NewAppOptionsWithFlagHome(t.TempDir()),
 		baseapp.SetChainID(testChainID),
@@ -183,6 +184,7 @@ func newTestApplication(
 	app := simapp.NewSimApp(
 		logger,
 		db,
+		nil,
 		true,
 		simtestutil.NewAppOptionsWithFlagHome(tb.TempDir()),
 		baseapp.SetChainID(testChainID),

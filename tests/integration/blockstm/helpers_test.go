@@ -5,8 +5,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 
+	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
-	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
