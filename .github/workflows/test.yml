@@ -596,7 +596,7 @@ jobs:
           name: "${{ github.sha }}-store-coverage"
           path: ./store/coverage.out
   test-blockstm:
-    runs-on: depot-ubuntu-22.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
