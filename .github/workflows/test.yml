@@ -320,6 +320,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure Git to use PAT
+        run: |
+          git config --global url."https://${{ secrets.GH_PAT }}:@github.com/".insteadOf "https://github.com/"
+          echo "GOPRIVATE=github.com/stablelabs/*" >> $GITHUB_ENV
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
@@ -515,6 +519,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure Git to use PAT
+        run: |
+          git config --global url."https://${{ secrets.GH_PAT }}:@github.com/".insteadOf "https://github.com/"
+          echo "GOPRIVATE=github.com/stablelabs/*" >> $GITHUB_ENV
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
