@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"math/rand"
 	"strings"
 	"sync"
@@ -262,6 +263,7 @@ func runSimulationAndCollectFinalizeHashes(tb testing.TB, cfg simtypes.Config, s
 	appFactory := func(
 		logger log.Logger,
 		db dbm.DB,
+		traceStore io.Writer,
 		loadLatest bool,
 		appOpts servertypes.AppOptions,
 		baseAppOptions ...func(*baseapp.BaseApp),
@@ -272,7 +274,7 @@ func runSimulationAndCollectFinalizeHashes(tb testing.TB, cfg simtypes.Config, s
 			})
 		}
 
-		app := NewSimApp(logger, db, loadLatest, appOpts, append(baseAppOptions, interBlockCacheOpt(), streamingOpt)...)
+		app := NewSimApp(logger, db, nil, loadLatest, appOpts, append(baseAppOptions, interBlockCacheOpt(), streamingOpt)...)
 		if enableBlockSTM {
 			app.SetBlockSTMTxRunner(txnrunner.NewSTMRunner(
 				app.TxConfig().TxDecoder(),
