@@ -3,19 +3,24 @@ package server
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/cometbft/cometbft/abci/server"
 	cmtcmd "github.com/cometbft/cometbft/cmd/cometbft/commands"
 	cmtcfg "github.com/cometbft/cometbft/config"
+	"github.com/cometbft/cometbft/crypto"
+	cmted25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
 	"github.com/cometbft/cometbft/node"
 	"github.com/cometbft/cometbft/p2p"
@@ -32,6 +37,7 @@ import (
 	"github.com/hashicorp/go-metrics"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -106,10 +112,11 @@ const (
 	// testnet keys
 	KeyIsTestnet             = "is-testnet"
 	KeyNewChainID            = "new-chain-ID"
-	KeyNewOpAddr             = "new-operator-addr"
 	KeyNewValAddr            = "new-validator-addr"
 	KeyUserPubKey            = "user-pub-key"
 	KeyTriggerTestnetUpgrade = "trigger-testnet-upgrade"
+	KeyTestnetValidators     = "testnet-validators"
+	KeyTestnetOutputDir      = "testnet-output-dir"
 )
 
 // StartCmdOptions defines options that can be customized in `StartCmdWithOptions`,
@@ -126,6 +133,10 @@ type StartCmdOptions struct {
 	AddFlags func(cmd *cobra.Command)
 	// StartCommandHanlder can be used to customize the start command handler
 	StartCommandHandler func(svrCtx *Context, clientCtx client.Context, appCreator types.AppCreator, inProcessConsensus bool, opts StartCmdOptions) error
+	// TestnetConfigModifier is called for each exported node's app.toml during multi-validator export.
+	// The app layer can use this to set testnet/mainnet-specific config values (e.g., evm-chain-id).
+	// isTestnet is true when --trigger-testnet-upgrade contains "rc".
+	TestnetConfigModifier func(v *viper.Viper, isTestnet bool, nodeIndex int)
 }
 
 // StartCmd runs the service passed in, either stand-alone or in-process with
@@ -642,8 +653,11 @@ func startApp(svrCtx *Context, appCreator types.AppCreator, opts StartCmdOptions
 // InPlaceTestnetCreator utilizes the provided chainID and operatorAddress as well as the local private validator key to
 // control the network represented in the data folder. This is useful to create testnets nearly identical to your
 // mainnet environment.
-func InPlaceTestnetCreator(testnetAppCreator types.AppCreator) *cobra.Command {
+func InPlaceTestnetCreator(testnetAppCreator types.AppCreator, extraOpts ...StartCmdOptions) *cobra.Command {
 	opts := StartCmdOptions{}
+	if len(extraOpts) > 0 {
+		opts = extraOpts[0]
+	}
 	if opts.DBOpener == nil {
 		opts.DBOpener = openDB
 	}
@@ -653,7 +667,7 @@ func InPlaceTestnetCreator(testnetAppCreator types.AppCreator) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   "in-place-testnet [newChainID] [newOperatorAddress]",
+		Use:   "in-place-testnet",
 		Short: "Create and start a testnet from current local state",
 		Long: `Create and start a testnet from current local state.
 After utilizing this command the network will start. If the network is stopped,
@@ -673,8 +687,8 @@ Regardless of whether the flag is set or not, if any new stores are introduced i
 those stores will be registered in order to prevent panics. Therefore, you only need to set the flag if
 you want to test the upgrade handler itself.
 `,
-		Example: "in-place-testnet localosmosis osmo12smx2wdlyttvyzvzg54y2vnqwq2qjateuf7thj",
-		Args:    cobra.ExactArgs(2),
+		Example: "in-place-testnet --new-chain-ID stabletestnet_2201-1",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			serverCtx := GetServerContextFromCmd(cmd)
 			_, err := GetPruningOptionsFromFlags(serverCtx.Viper)
@@ -692,8 +706,10 @@ you want to test the upgrade handler itself.
 				serverCtx.Logger.Info("starting ABCI without CometBFT")
 			}
 
-			newChainID := args[0]
-			newOperatorAddress := args[1]
+			newChainID := serverCtx.Viper.GetString(KeyNewChainID)
+			if newChainID == "" {
+				return fmt.Errorf("--%s is required", KeyNewChainID)
+			}
 
 			skipConfirmation, _ := cmd.Flags().GetBool("skip-confirmation")
 
@@ -713,7 +729,85 @@ you want to test the upgrade handler itself.
 			// This is done to prevent changes to existing start API.
 			serverCtx.Viper.Set(KeyIsTestnet, true)
 			serverCtx.Viper.Set(KeyNewChainID, newChainID)
-			serverCtx.Viper.Set(KeyNewOpAddr, newOperatorAddress)
+			numValidators, _ := cmd.Flags().GetInt(KeyTestnetValidators)
+			if numValidators < 1 {
+				numValidators = 1
+			}
+			serverCtx.Viper.Set(KeyTestnetValidators, numValidators)
+
+			outputDir, _ := cmd.Flags().GetString(KeyTestnetOutputDir)
+			serverCtx.Viper.Set(KeyTestnetOutputDir, outputDir)
+
+			if numValidators > 1 {
+				// Multi-validator workflow:
+				// 1. testnetify with single validator (100% power) so one node can produce blocks
+				// 2. Start node with halt-height = lastBlockHeight+1 to run upgrade and commit one block
+				// 3. After halt, re-open state and swap validator set to multi-validator
+				// 4. Export node directories
+
+				// NOTE: Do NOT override KeyTestnetValidators here.
+				// CometBFT's testnetify always uses single validator (hardcoded),
+				// but the app layer (InitStableForTestnet) needs the real numValidators
+				// to register all validators in the staking module during the first block.
+
+				home := serverCtx.Config.RootDir
+				lastHeight, err := getLastBlockHeight(home)
+				if err != nil {
+					return fmt.Errorf("failed to determine last block height: %w", err)
+				}
+
+				// Phase 1: testnetify (single val) + start node + halt after first block.
+				// The halt-height mechanism causes a CometBFT "CONSENSUS FAILURE" panic
+				// which is expected — the first block has already been committed by that point.
+				// We send SIGINT to trigger a clean shutdown after a short delay.
+				serverCtx.Logger.Info("Phase 1: initializing single-validator testnet and committing first block...")
+
+				// Poll the local RPC endpoint to detect first block commit, then SIGINT.
+				rpcAddr := serverCtx.Config.RPC.ListenAddress
+				go func() {
+					// Wait for RPC to become available, then poll /status for height.
+					ticker := time.NewTicker(1 * time.Second)
+					defer ticker.Stop()
+					for range ticker.C {
+						resp, err := http.Get(fmt.Sprintf("http://%s/status", strings.TrimPrefix(rpcAddr, "tcp://")))
+						if err != nil {
+							continue
+						}
+						var result struct {
+							Result struct {
+								SyncInfo struct {
+									LatestBlockHeight string `json:"latest_block_height"`
+								} `json:"sync_info"`
+							} `json:"result"`
+						}
+						if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+							resp.Body.Close()
+							continue
+						}
+						resp.Body.Close()
+						h, _ := strconv.ParseInt(result.Result.SyncInfo.LatestBlockHeight, 10, 64)
+						if h > lastHeight {
+							serverCtx.Logger.Info("First block committed, sending shutdown signal...", "height", h)
+							p, _ := os.FindProcess(os.Getpid())
+							p.Signal(os.Interrupt)
+							return
+						}
+					}
+				}()
+				_ = wrapCPUProfile(serverCtx, func() error {
+					return opts.StartCommandHandler(serverCtx, clientCtx, testnetAppCreator, withCMT, opts)
+				})
+
+				// Phase 2: swap validator set to multi-validator and export.
+				serverCtx.Logger.Info("Phase 2: converting to multi-validator and exporting node directories...",
+					"validators", numValidators, "output", outputDir)
+				if err := convertToMultiValidator(serverCtx, numValidators, outputDir, opts); err != nil {
+					return fmt.Errorf("failed to convert to multi-validator: %w", err)
+				}
+				fmt.Printf("Successfully exported %d validator node directories to %s\n", numValidators, outputDir)
+				fmt.Println("Start each node separately with: stabled start --home <node-dir>")
+				return nil
+			}
 
 			err = wrapCPUProfile(serverCtx, func() error {
 				return opts.StartCommandHandler(serverCtx, clientCtx, testnetAppCreator, withCMT, opts)
@@ -732,8 +826,11 @@ you want to test the upgrade handler itself.
 	}
 
 	addStartNodeFlags(cmd, opts)
+	cmd.Flags().String(KeyNewChainID, "", "New chain ID for the testnet (required)")
 	cmd.Flags().String(KeyTriggerTestnetUpgrade, "", "If set (example: \"v21\"), triggers the v21 upgrade handler to run on the first block of the testnet")
 	cmd.Flags().Bool("skip-confirmation", false, "Skip the confirmation prompt")
+	cmd.Flags().Int(KeyTestnetValidators, 1, "Total number of validators to create (1 = only the primary signing validator)")
+	cmd.Flags().String(KeyTestnetOutputDir, "out", "Output directory for exported validator node directories")
 	return cmd
 }
 
@@ -867,46 +964,7 @@ func testnetify(ctx *Context, testnetAppCreator types.AppCreator, db dbm.DB, tra
 	block.LastBlockID = state.LastBlockID
 	block.LastCommit.BlockID = state.LastBlockID
 
-	// Create a vote from our validator
-	vote := cmttypes.Vote{
-		Type:             cmtproto.PrecommitType,
-		Height:           state.LastBlockHeight,
-		Round:            0,
-		BlockID:          state.LastBlockID,
-		Timestamp:        time.Now(),
-		ValidatorAddress: validatorAddress,
-		ValidatorIndex:   0,
-		Signature:        []byte{},
-	}
-
-	// Sign the vote, and copy the proto changes from the act of signing to the vote itself
-	voteProto := vote.ToProto()
-	err = privValidator.SignVote(newChainID, voteProto)
-	if err != nil {
-		return nil, err
-	}
-	vote.Signature = voteProto.Signature
-	vote.Timestamp = voteProto.Timestamp
-
-	// Modify the block's lastCommit to be signed only by our validator
-	block.LastCommit.Signatures[0].ValidatorAddress = validatorAddress
-	block.LastCommit.Signatures[0].Signature = vote.Signature
-	block.LastCommit.Signatures = []cmttypes.CommitSig{block.LastCommit.Signatures[0]}
-
-	// Load the seenCommit of the lastBlockHeight and modify it to be signed from our validator
-	seenCommit := blockStore.LoadSeenCommit(state.LastBlockHeight)
-	seenCommit.BlockID = state.LastBlockID
-	seenCommit.Round = vote.Round
-	seenCommit.Signatures[0].Signature = vote.Signature
-	seenCommit.Signatures[0].ValidatorAddress = validatorAddress
-	seenCommit.Signatures[0].Timestamp = vote.Timestamp
-	seenCommit.Signatures = []cmttypes.CommitSig{seenCommit.Signatures[0]}
-	err = blockStore.SaveSeenCommit(state.LastBlockHeight, seenCommit)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create ValidatorSet struct containing just our valdiator.
+	// Create a single-validator set with the local validator key.
 	newVal := &cmttypes.Validator{
 		Address:     validatorAddress,
 		PubKey:      userPubKey,
@@ -917,7 +975,45 @@ func testnetify(ctx *Context, testnetAppCreator types.AppCreator, db dbm.DB, tra
 		Proposer:   newVal,
 	}
 
-	// Replace all valSets in state to be the valSet with just our validator.
+	// Build commit signature from our single validator.
+	vote := cmttypes.Vote{
+		Type:             cmtproto.PrecommitType,
+		Height:           state.LastBlockHeight,
+		Round:            0,
+		BlockID:          state.LastBlockID,
+		Timestamp:        time.Now(),
+		ValidatorAddress: validatorAddress,
+		ValidatorIndex:   0,
+		Signature:        []byte{},
+	}
+	voteProto := vote.ToProto()
+	err = privValidator.SignVote(newChainID, voteProto)
+	if err != nil {
+		return nil, err
+	}
+	vote.Signature = voteProto.Signature
+	vote.Timestamp = voteProto.Timestamp
+
+	// Overwrite block's lastCommit and seenCommit.
+	block.LastCommit.Signatures = []cmttypes.CommitSig{{
+		BlockIDFlag:      cmttypes.BlockIDFlagCommit,
+		ValidatorAddress: validatorAddress,
+		Timestamp:        vote.Timestamp,
+		Signature:        vote.Signature,
+	}}
+	block.LastCommit.BlockID = state.LastBlockID
+	block.LastCommit.Round = 0
+
+	seenCommit := blockStore.LoadSeenCommit(state.LastBlockHeight)
+	seenCommit.BlockID = state.LastBlockID
+	seenCommit.Round = 0
+	seenCommit.Signatures = block.LastCommit.Signatures
+	err = blockStore.SaveSeenCommit(state.LastBlockHeight, seenCommit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Replace all valSets in state.
 	state.Validators = newValSet
 	state.LastValidators = newValSet
 	state.NextValidators = newValSet
@@ -970,6 +1066,313 @@ func testnetify(ctx *Context, testnetAppCreator types.AppCreator, db dbm.DB, tra
 	}
 
 	return testnetApp, err
+}
+
+// deriveTestnetValidatorKey deterministically derives an ed25519 private key
+// for a testnet validator at the given index. The app layer must use the exact
+// same seed formula to produce matching staking-module validators.
+func deriveTestnetValidatorKey(index int) cmted25519.PrivKey {
+	secret := []byte(fmt.Sprintf("stable-testnet-validator-%d", index))
+	return cmted25519.GenPrivKeyFromSecret(secret)
+}
+
+// getLastBlockHeight opens the block store to read the latest block height
+// without starting the full application.
+func getLastBlockHeight(home string) (int64, error) {
+	cfg := cmtcfg.DefaultConfig()
+	cfg.SetRoot(home)
+
+	blockStoreDB, err := cmtcfg.DefaultDBProvider(&cmtcfg.DBContext{ID: "blockstore", Config: cfg})
+	if err != nil {
+		return 0, err
+	}
+	defer blockStoreDB.Close()
+
+	blockStore := store.NewBlockStore(blockStoreDB)
+	defer blockStore.Close()
+
+	return blockStore.Height(), nil
+}
+
+// convertToMultiValidator re-opens the state/block stores after the single-validator
+// node has halted, replaces the validator set with N validators (primary + derived),
+// re-signs the last commit, and exports node directories.
+func convertToMultiValidator(ctx *Context, numValidators int, outputDir string, opts StartCmdOptions) error {
+	config := ctx.Config
+
+	newChainID, ok := ctx.Viper.Get(KeyNewChainID).(string)
+	if !ok {
+		return fmt.Errorf("expected string for key %s", KeyNewChainID)
+	}
+
+	// Open block store and state store.
+	blockStoreDB, err := cmtcfg.DefaultDBProvider(&cmtcfg.DBContext{ID: "blockstore", Config: config})
+	if err != nil {
+		return err
+	}
+	defer blockStoreDB.Close()
+	blockStore := store.NewBlockStore(blockStoreDB)
+	defer blockStore.Close()
+
+	stateDB, err := cmtcfg.DefaultDBProvider(&cmtcfg.DBContext{ID: "state", Config: config})
+	if err != nil {
+		return err
+	}
+	defer stateDB.Close()
+
+	stateStore := sm.NewStore(stateDB, sm.StoreOptions{
+		DiscardABCIResponses: config.Storage.DiscardABCIResponses,
+	})
+
+	genDocProvider := node.DefaultGenesisDocProviderFunc(config)
+	state, _, err := node.LoadStateFromDBOrGenesisDocProvider(stateDB, genDocProvider)
+	if err != nil {
+		return err
+	}
+
+	// Load primary validator raw key (bypass FilePV.SignVote to avoid double-sign protection
+	// which rejects re-signing at the same height after Phase 1 committed a block).
+	privValidator := pvm.LoadOrGenFilePV(config.PrivValidatorKeyFile(), config.PrivValidatorStateFile())
+	primaryPrivKey := privValidator.Key.PrivKey
+	userPubKey := primaryPrivKey.PubKey()
+	validatorAddress := userPubKey.Address()
+
+	// Build multi-validator set.
+	totalPower := int64(900000000000000)
+	perValPower := totalPower / int64(numValidators)
+
+	// Map validator address → private key for signing.
+	privKeys := make(map[string]crypto.PrivKey, numValidators)
+	privKeys[validatorAddress.String()] = primaryPrivKey
+
+	rawVals := make([]*cmttypes.Validator, numValidators)
+	rawVals[0] = &cmttypes.Validator{
+		Address:     validatorAddress,
+		PubKey:      userPubKey,
+		VotingPower: perValPower,
+	}
+	for i := 1; i < numValidators; i++ {
+		pk := deriveTestnetValidatorKey(i)
+		pub := pk.PubKey()
+		privKeys[pub.Address().String()] = pk
+		rawVals[i] = &cmttypes.Validator{
+			Address:     pub.Address(),
+			PubKey:      pub,
+			VotingPower: perValPower,
+		}
+	}
+
+	newValSet := cmttypes.NewValidatorSet(rawVals)
+
+	// Build commit signatures in sorted validator order using raw keys.
+	now := time.Now()
+	sigs := make([]cmttypes.CommitSig, newValSet.Size())
+	for idx, val := range newValSet.Validators {
+		pk := privKeys[val.Address.String()]
+		v := &cmtproto.Vote{
+			Type:             cmtproto.PrecommitType,
+			Height:           state.LastBlockHeight,
+			Round:            0,
+			BlockID:          state.LastBlockID.ToProto(),
+			Timestamp:        now,
+			ValidatorAddress: val.Address,
+			ValidatorIndex:   int32(idx),
+		}
+		signBytes := cmttypes.VoteSignBytes(newChainID, v)
+		sig, signErr := pk.Sign(signBytes)
+		if signErr != nil {
+			return fmt.Errorf("error signing vote for validator %X: %w", val.Address, signErr)
+		}
+		sigs[idx] = cmttypes.CommitSig{
+			BlockIDFlag:      cmttypes.BlockIDFlagCommit,
+			ValidatorAddress: val.Address,
+			Timestamp:        now,
+			Signature:        sig,
+		}
+	}
+
+	// Update only the seenCommit (commit that finalized the latest block).
+	// Do NOT modify block.LastCommit — it commits the previous block and must
+	// remain valid against the previous validator set (single validator from Phase 1).
+	seenCommit := blockStore.LoadSeenCommit(state.LastBlockHeight)
+	seenCommit.BlockID = state.LastBlockID
+	seenCommit.Round = 0
+	seenCommit.Signatures = sigs
+	if err := blockStore.SaveSeenCommit(state.LastBlockHeight, seenCommit); err != nil {
+		return err
+	}
+
+	// Replace validator sets in state.
+	state.Validators = newValSet
+	state.LastValidators = newValSet
+	state.NextValidators = newValSet
+	state.LastHeightValidatorsChanged = blockStore.Height()
+
+	if err := stateStore.Save(state); err != nil {
+		return err
+	}
+
+	// Update stateDB validator entries.
+	valSet, err := state.Validators.ToProto()
+	if err != nil {
+		return err
+	}
+	valInfo := &cmtstate.ValidatorsInfo{
+		ValidatorSet:      valSet,
+		LastHeightChanged: state.LastBlockHeight,
+	}
+	buf, err := valInfo.Marshal()
+	if err != nil {
+		return err
+	}
+	for _, h := range []int64{blockStore.Height() - 1, blockStore.Height(), blockStore.Height() + 1} {
+		if err := stateDB.Set(fmt.Appendf(nil, "validatorsKey:%v", h), buf); err != nil {
+			return err
+		}
+	}
+
+	// Close stores before copying for export.
+	blockStore.Close()
+	blockStoreDB.Close()
+	stateDB.Close()
+
+	// Export node directories.
+	return exportValidatorNodeDirs(config, ctx.Viper, outputDir, numValidators, opts)
+}
+
+// exportValidatorNodeDirs creates node{idx}/ directories under outputDir,
+// each containing a copy of the primary node's data directory, a unique
+// priv_validator_key.json, a unique node_key.json, and pre-configured
+// peering so that all nodes can discover each other on localhost.
+//
+// Port layout per node (base ports offset by index):
+//
+//	P2P:  26656 + i*100
+//	RPC:  26657 + i*100
+//	ABCI: 26658 + i*100
+//	gRPC: 9090  + i
+//	API:  1317  + i
+func exportValidatorNodeDirs(config *cmtcfg.Config, v *viper.Viper, outputDir string, numValidators int, opts StartCmdOptions) error {
+	srcHome := config.RootDir
+
+	// Determine testnet vs mainnet from upgrade flag.
+	upgradeFlag := v.GetString(KeyTriggerTestnetUpgrade)
+	isTestnet := strings.Contains(strings.ToLower(upgradeFlag), "rc")
+
+	// First pass: copy dirs, write keys, generate node IDs.
+	nodeIDs := make([]string, numValidators)
+	for i := 0; i < numValidators; i++ {
+		nodeDir := filepath.Join(outputDir, fmt.Sprintf("node%d", i))
+
+		if err := copyDir(srcHome, nodeDir); err != nil {
+			return fmt.Errorf("copy node%d: %w", i, err)
+		}
+
+		// Overwrite priv_validator_key for additional validators.
+		if i > 0 {
+			pk := deriveTestnetValidatorKey(i)
+			keyFilePath := filepath.Join(nodeDir, "config", "priv_validator_key.json")
+			stateFilePath := filepath.Join(nodeDir, "data", "priv_validator_state.json")
+			filePV := pvm.NewFilePV(pk, keyFilePath, stateFilePath)
+			filePV.Save()
+		}
+
+		// Generate a unique node_key.json for each node so they have distinct p2p identities.
+		nodeKeyFile := filepath.Join(nodeDir, "config", "node_key.json")
+		_ = os.Remove(nodeKeyFile) // remove copied key to force regeneration
+		nodeKey, err := p2p.LoadOrGenNodeKey(nodeKeyFile)
+		if err != nil {
+			return fmt.Errorf("generate node key for node%d: %w", i, err)
+		}
+		nodeIDs[i] = string(nodeKey.ID())
+	}
+
+	// Second pass: write config.toml and modify app.toml in-place with peering and port settings.
+	for i := 0; i < numValidators; i++ {
+		nodeDir := filepath.Join(outputDir, fmt.Sprintf("node%d", i))
+
+		var peers []string
+		for j := 0; j < numValidators; j++ {
+			if j == i {
+				continue
+			}
+			peers = append(peers, fmt.Sprintf("%s@127.0.0.1:%d", nodeIDs[j], 26656+j*100))
+		}
+
+		// Clone the source CometBFT config and adjust per-node settings.
+		nodeCfg := *config
+		nodeCfg.SetRoot(nodeDir)
+		nodeCfg.Moniker = fmt.Sprintf("node%d", i)
+		nodeCfg.P2P.ListenAddress = fmt.Sprintf("tcp://0.0.0.0:%d", 26656+i*100)
+		nodeCfg.P2P.PersistentPeers = strings.Join(peers, ",")
+		nodeCfg.P2P.AddrBookStrict = false
+		nodeCfg.P2P.AllowDuplicateIP = true
+		nodeCfg.RPC.ListenAddress = fmt.Sprintf("tcp://0.0.0.0:%d", 26657+i*100)
+
+		cmtcfg.WriteConfigFile(filepath.Join(nodeDir, "config", "config.toml"), &nodeCfg)
+
+		// Modify the copied app.toml in-place using Viper.
+		// This preserves all app-specific sections (EVM, JSON-RPC, etc.) that
+		// serverconfig.WriteConfigFile would strip.
+		nodeViper := viper.New()
+		nodeViper.SetConfigFile(filepath.Join(nodeDir, "config", "app.toml"))
+		if err := nodeViper.ReadInConfig(); err != nil {
+			return fmt.Errorf("read app.toml for node%d: %w", i, err)
+		}
+
+		// Adjust SDK ports per node.
+		nodeViper.Set("api.address", fmt.Sprintf("tcp://0.0.0.0:%d", 1317+i))
+		nodeViper.Set("grpc.address", fmt.Sprintf("0.0.0.0:%d", 9090+i))
+
+		// Adjust JSON-RPC ports per node (if the section exists in the copied config).
+		if nodeViper.IsSet("json-rpc.address") {
+			nodeViper.Set("json-rpc.address", fmt.Sprintf("127.0.0.1:%d", 8545+i))
+			nodeViper.Set("json-rpc.ws-address", fmt.Sprintf("127.0.0.1:%d", 8546+i*100))
+
+			// Enable JSON-RPC on node0 with broader access for development.
+			if i == 0 {
+				nodeViper.Set("json-rpc.enable", true)
+				nodeViper.Set("json-rpc.address", "0.0.0.0:8545")
+				nodeViper.Set("json-rpc.api", "eth,web3,debug,net")
+			}
+		}
+
+		// Allow the app layer to apply testnet/mainnet-specific config.
+		if opts.TestnetConfigModifier != nil {
+			opts.TestnetConfigModifier(nodeViper, isTestnet, i)
+		}
+
+		if err := nodeViper.WriteConfig(); err != nil {
+			return fmt.Errorf("write app.toml for node%d: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+// copyDir recursively copies src directory to dst.
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dst, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dstPath, data, info.Mode())
+	})
 }
 
 // addStartNodeFlags should be added to any CLI commands that start the network.

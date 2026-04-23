@@ -71,8 +71,10 @@ func (ag *AppGenesis) ValidateAndComplete() error {
 		ag.GenesisTime = cmttime.Now()
 	}
 
-	if err := ag.Consensus.ValidateAndComplete(); err != nil {
-		return err
+	if ag.Consensus != nil {
+		if err := ag.Consensus.ValidateAndComplete(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -115,6 +117,20 @@ func AppGenesisFromReader(reader io.Reader) (*AppGenesis, error) {
 				Validators: ctmGenesis.Validators,
 				Params:     ctmGenesis.ConsensusParams,
 			},
+		}
+	}
+
+	if appGenesis.Consensus == nil {
+		var raw struct {
+			ConsensusParams json.RawMessage `json:"consensus_params"`
+		}
+		if err := json.Unmarshal(jsonBlob, &raw); err == nil && len(raw.ConsensusParams) > 0 {
+			var params cmttypes.ConsensusParams
+			if err := cmtjson.Unmarshal(raw.ConsensusParams, &params); err == nil {
+				appGenesis.Consensus = &ConsensusGenesis{
+					Params: &params,
+				}
+			}
 		}
 	}
 
