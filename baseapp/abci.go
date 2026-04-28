@@ -837,8 +837,10 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 	// NOTE: Not all raw transactions may adhere to the sdk.Tx interface, e.g.
 	// vote extensions, so skip those.
 	txResults := make([]*abci.ExecTxResult, 0, len(req.Txs))
-	for _, rawTx := range req.Txs {
+	for txIndex, rawTx := range req.Txs {
 		var response *abci.ExecTxResult
+
+		app.observer.OnTxStart(txIndex)
 
 		if _, err := app.txDecoder(rawTx); err == nil {
 			response = app.deliverTx(rawTx)
@@ -854,6 +856,8 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 				false,
 			)
 		}
+
+		app.observer.OnTxEnd(txIndex, response)
 
 		// check after every tx if we should abort
 		select {
@@ -905,6 +909,13 @@ func (app *BaseApp) internalFinalizeBlock(ctx context.Context, req *abci.Request
 // extensions into the proposal, which should not themselves be executed in cases
 // where they adhere to the sdk.Tx interface.
 func (app *BaseApp) FinalizeBlock(req *abci.RequestFinalizeBlock) (res *abci.ResponseFinalizeBlock, err error) {
+	app.observer.OnFinalizeBlockStart(req.Height)
+	defer func() {
+		if res != nil {
+			app.observer.OnFinalizeBlockEnd(res.AppHash)
+		}
+	}()
+
 	defer func() {
 		if res == nil {
 			return

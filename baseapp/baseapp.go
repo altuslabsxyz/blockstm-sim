@@ -25,6 +25,7 @@ import (
 	"cosmossdk.io/store/snapshots"
 	storetypes "cosmossdk.io/store/types"
 
+	"github.com/cosmos/cosmos-sdk/baseapp/lifecycle"
 	"github.com/cosmos/cosmos-sdk/baseapp/oe"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -187,6 +188,9 @@ type BaseApp struct {
 
 	cdc codec.Codec
 
+	// observer receives block and transaction lifecycle events.
+	observer lifecycle.LifecycleObserver
+
 	// optimisticExec contains the context required for Optimistic Execution,
 	// including the goroutine handling.This is experimental and must be enabled
 	// by developers.
@@ -233,6 +237,10 @@ func NewBaseApp(
 
 	if app.mempool == nil {
 		app.SetMempool(mempool.NoOpMempool{})
+	}
+
+	if app.observer == nil {
+		app.observer = lifecycle.NoopLifecycleObserver{}
 	}
 
 	abciProposalHandler := NewDefaultProposalHandler(app.mempool, app)

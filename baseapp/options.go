@@ -13,6 +13,7 @@ import (
 	snapshottypes "cosmossdk.io/store/snapshots/types"
 	storetypes "cosmossdk.io/store/types"
 
+	"github.com/cosmos/cosmos-sdk/baseapp/lifecycle"
 	"github.com/cosmos/cosmos-sdk/baseapp/oe"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
@@ -115,6 +116,11 @@ func SetChainID(chainID string) func(*BaseApp) {
 // SetStoreLoader allows customization of the rootMultiStore initialization.
 func SetStoreLoader(loader StoreLoader) func(*BaseApp) {
 	return func(app *BaseApp) { app.SetStoreLoader(loader) }
+}
+
+// SetLifecycleObserver sets the LifecycleObserver on BaseApp.
+func SetLifecycleObserver(obs lifecycle.LifecycleObserver) func(*BaseApp) {
+	return func(app *BaseApp) { app.SetLifecycleObserver(obs) }
 }
 
 // SetOptimisticExecution enables optimistic execution.
@@ -331,6 +337,14 @@ func (app *BaseApp) SetMempool(mempool mempool.Mempool) {
 		panic("SetMempool() on sealed BaseApp")
 	}
 	app.mempool = mempool
+}
+
+// SetLifecycleObserver sets the LifecycleObserver for the BaseApp.
+func (app *BaseApp) SetLifecycleObserver(obs lifecycle.LifecycleObserver) {
+	if app.sealed {
+		panic("SetLifecycleObserver() on sealed BaseApp")
+	}
+	app.observer = obs
 }
 
 // SetProcessProposal sets the process proposal function for the BaseApp.

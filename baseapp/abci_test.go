@@ -55,6 +55,30 @@ func (m *mockABCIListener) ListenCommit(ctx context.Context, commit abci.Respons
 	return m.ListenCommitFn(ctx, commit, pairs)
 }
 
+type recordingObserver struct {
+	events *[]string
+}
+
+func (r *recordingObserver) OnFinalizeBlockStart(height int64) {
+	*r.events = append(*r.events, fmt.Sprintf("OnFinalizeBlockStart:%d", height))
+}
+
+func (r *recordingObserver) OnFinalizeBlockEnd(_ []byte) {
+	*r.events = append(*r.events, "OnFinalizeBlockEnd")
+}
+
+func (r *recordingObserver) OnTxStart(txIndex int) {
+	*r.events = append(*r.events, fmt.Sprintf("OnTxStart:%d", txIndex))
+}
+
+func (r *recordingObserver) OnTxEnd(txIndex int, _ *abci.ExecTxResult) {
+	*r.events = append(*r.events, fmt.Sprintf("OnTxEnd:%d", txIndex))
+}
+
+func (r *recordingObserver) OnKVWrite(_ string, _ []byte, _ int) {
+	*r.events = append(*r.events, "OnKVWrite")
+}
+
 func TestABCI_Info(t *testing.T) {
 	suite := NewBaseAppSuite(t)
 
@@ -2518,6 +2542,36 @@ func TestABCI_Proposal_FailReCheckTx(t *testing.T) {
 
 	require.NotEmpty(t, res.TxResults[0].Events)
 	require.True(t, res.TxResults[0].IsOK(), fmt.Sprintf("%v", res))
+}
+
+func TestLifecycleObserverHookSequence(t *testing.T) {
+	var events []string
+
+	obs := &recordingObserver{events: &events}
+
+	suite := NewBaseAppSuite(t, baseapp.SetLifecycleObserver(obs))
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	res, err := suite.baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{
+		Height: 1,
+		Txs:    [][]byte{[]byte("tx0"), []byte("tx1")},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	expected := []string{
+		"OnFinalizeBlockStart:1",
+		"OnTxStart:0",
+		"OnTxEnd:0",
+		"OnTxStart:1",
+		"OnTxEnd:1",
+		"OnFinalizeBlockEnd",
+	}
+	require.Equal(t, expected, events)
 }
 
 func TestFinalizeBlockDeferResponseHandle(t *testing.T) {
