@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+
+      - name: Checkout stable-sdk
+        uses: actions/checkout@v4
+        with:
+          repository: stablelabs/stable-sdk
+          path: stable-sdk
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Update replace directive for CI
+        env:
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          go mod edit -replace "github.com/cosmos/cosmos-sdk=${WORKSPACE}/stable-sdk"
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build (default)
+        run: go build ./...
+
+      - name: Build (simharness)
+        run: go build -tags simharness ./...
+
+      - name: Build (simharness + canary)
+        run: go build -tags "simharness simharness_canary" ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Verify version command
+        run: |
+          go build -o blockstm-sim ./cmd/blockstm-sim
+          ./blockstm-sim version
