@@ -21,21 +21,11 @@ jobs:
         with:
           go-version: "1.25.x"
 
-      - name: Checkout stable-sdk
-        uses: actions/checkout@v4
-        with:
-          repository: stablelabs/stable-sdk
-          path: stable-sdk
-          token: ${{ secrets.GH_PAT }}
-
-      - name: Update replace directive for CI
-        env:
-          WORKSPACE: ${{ github.workspace }}
+      - name: Configure modules for CI
         run: |
-          go mod edit -replace "github.com/cosmos/cosmos-sdk=${WORKSPACE}/stable-sdk"
-
-      - name: Download dependencies
-        run: go mod download
+          go mod edit -dropreplace github.com/cosmos/cosmos-sdk
+          go mod edit -require github.com/cosmos/cosmos-sdk@v0.50.13
+          go mod tidy
 
       - name: Build (default)
         run: go build ./...
