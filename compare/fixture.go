@@ -4,16 +4,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"sigs.k8s.io/yaml"
 )
 
+type FixtureKind string
+
+const KindCanary FixtureKind = "canary"
+
 type Fixture struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
+	Kind        FixtureKind `json:"kind,omitempty"`
 	Genesis     GenesisSpec `json:"genesis"`
 	Blocks      []BlockSpec `json:"blocks"`
 }
+
+func (f Fixture) IsCanary() bool { return f.Kind == KindCanary }
 
 type GenesisSpec struct {
 	Accounts map[string]AccountSpec `json:"accounts"`
@@ -45,4 +53,25 @@ func LoadFixture(dir, name string) (Fixture, error) {
 		return Fixture{}, fmt.Errorf("parse fixture %s: %w", name, err)
 	}
 	return f, nil
+}
+
+func LoadCorpus(dir string) ([]Fixture, error) {
+	matches, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
+	if err != nil {
+		return nil, fmt.Errorf("glob corpus %s: %w", dir, err)
+	}
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no *.yaml fixtures found in %s", dir)
+	}
+
+	fixtures := make([]Fixture, 0, len(matches))
+	for _, path := range matches {
+		f, err := LoadFixture(filepath.Dir(path), filepath.Base(path))
+		if err != nil {
+			return nil, err
+		}
+		fixtures = append(fixtures, f)
+	}
+	sort.Slice(fixtures, func(i, j int) bool { return fixtures[i].Name < fixtures[j].Name })
+	return fixtures, nil
 }

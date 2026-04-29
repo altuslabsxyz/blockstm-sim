@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/altuslabsxyz/blockstm-sim/run"
 	"github.com/altuslabsxyz/blockstm-sim/version"
 
 	_ "github.com/altuslabsxyz/blockstm-sim/simharness"
@@ -18,6 +19,7 @@ func main() {
 	}
 
 	rootCmd.AddCommand(version.NewCommand())
+	rootCmd.AddCommand(run.NewCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
