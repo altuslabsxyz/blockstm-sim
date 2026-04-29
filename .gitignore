@@ -14,5 +14,7 @@ build/
 *.swo
 *~
 
+docs/superpowers/
+
 .DS_Store
 Thumbs.db

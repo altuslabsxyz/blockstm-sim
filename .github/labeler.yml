@@ -1,0 +1,18 @@
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+
+simharness:
+  - changed-files:
+      - any-glob-to-any-file: "simharness/**"
+
+cmd:
+  - changed-files:
+      - any-glob-to-any-file: "cmd/**"
+
+build:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "Makefile"
+          - "go.mod"
+          - "go.sum"
