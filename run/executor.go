@@ -17,6 +17,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
+	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/testutil/configurator"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -35,8 +36,15 @@ import (
 	"github.com/altuslabsxyz/blockstm-sim/instrument"
 )
 
-var appConfig = depinject.Configs(
-	configurator.NewAppConfig(
+type txBuilderFn func(spec compare.TxSpec, keys map[string]cryptotypes.PrivKey) ([]sdk.Msg, error)
+
+var (
+	extraModuleOpts []configurator.ModuleOption
+	extraTxBuilders = map[string]txBuilderFn{}
+)
+
+func buildAppConfig() depinject.Config {
+	opts := []configurator.ModuleOption{
 		configurator.AuthModule(),
 		configurator.BankModule(),
 		configurator.StakingModule(),
@@ -45,9 +53,13 @@ var appConfig = depinject.Configs(
 		configurator.ProtocolPoolModule(),
 		configurator.ConsensusModule(),
 		configurator.TxModule(),
-	),
-	depinject.Supply(log.NewNopLogger()),
-)
+	}
+	opts = append(opts, extraModuleOpts...)
+	return depinject.Configs(
+		configurator.NewAppConfig(opts...),
+		depinject.Supply(log.NewNopLogger()),
+	)
+}
 
 type FixtureExecutor struct {
 	oracle   *runtime.App
@@ -100,17 +112,19 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	var txCfg client.TxConfig
 
 	baseCfg.DB = dbm.NewMemDB()
-	oracleApp, err := simtestutil.SetupWithConfiguration(appConfig, baseCfg, &txCfg)
+	cfg := buildAppConfig()
+	oracleApp, err := simtestutil.SetupWithConfiguration(cfg, baseCfg, &txCfg)
 	if err != nil {
 		return fmt.Errorf("setup oracle app: %w", err)
 	}
 	instrument.InstrumentApp(oracleApp, instrument.Options{Runner: instrument.RunnerSequential})
 
 	baseCfg.DB = dbm.NewMemDB()
-	probeApp, err := simtestutil.SetupWithConfiguration(appConfig, baseCfg)
+	probeApp, err := simtestutil.SetupWithConfiguration(cfg, baseCfg)
 	if err != nil {
 		return fmt.Errorf("setup probe app: %w", err)
 	}
+	instrument.InstrumentSTM(probeApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), nil, 4, false, nil))
 
 	e.oracle = oracleApp
 	e.probe = probeApp
@@ -170,7 +184,15 @@ func (e *FixtureExecutor) buildTx(spec compare.TxSpec) ([]byte, error) {
 			amount,
 		))
 	default:
-		return nil, fmt.Errorf("unsupported message type %q", spec.Msg)
+		if builder, ok := extraTxBuilders[spec.Msg]; ok {
+			var err error
+			msgs, err = builder(spec, e.keys)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("unsupported message type %q", spec.Msg)
+		}
 	}
 
 	tx, err := simtestutil.GenSignedMockTx(

@@ -38,9 +38,11 @@ type BlockSpec struct {
 type TxSpec struct {
 	Signer string `json:"signer"`
 	Msg    string `json:"msg"`
-	To     string `json:"to"`
-	Amount string `json:"amount"`
+	To     string `json:"to,omitempty"`
+	Amount string `json:"amount,omitempty"`
 	Gas    uint64 `json:"gas"`
+	Key    string `json:"key,omitempty"`
+	Value  int64  `json:"value,omitempty"`
 }
 
 func LoadFixture(dir, name string) (Fixture, error) {
