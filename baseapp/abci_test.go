@@ -2574,6 +2574,34 @@ func TestLifecycleObserverHookSequence(t *testing.T) {
 	require.Equal(t, expected, events)
 }
 
+func TestSetLifecycleObserverPostSeal(t *testing.T) {
+	suite := NewBaseAppSuite(t)
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	var events []string
+	obs := &recordingObserver{events: &events}
+
+	require.NotPanics(t, func() {
+		suite.baseApp.SetLifecycleObserver(obs)
+	})
+
+	res, err := suite.baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: 1})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Contains(t, events, "OnFinalizeBlockStart:1")
+}
+
+func TestUnsetBlockSTMTxRunner(t *testing.T) {
+	suite := NewBaseAppSuite(t)
+	require.NotPanics(t, func() {
+		suite.baseApp.UnsetBlockSTMTxRunner()
+	})
+}
+
 func TestFinalizeBlockDeferResponseHandle(t *testing.T) {
 	suite := NewBaseAppSuite(t, baseapp.SetHaltHeight(1), func(ba *baseapp.BaseApp) {
 		ba.SetStreamingManager(storetypes.StreamingManager{

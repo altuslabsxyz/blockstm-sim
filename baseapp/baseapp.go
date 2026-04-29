@@ -196,6 +196,10 @@ type BaseApp struct {
 	// by developers.
 	optimisticExec *oe.OptimisticExecution
 
+	// txRunner is an optional alternative transaction executor (e.g., BlockSTM
+	// for parallel execution). When nil, the built-in sequential loop is used.
+	txRunner sdk.TxRunner
+
 	// disableBlockGasMeter will disable the block gas meter if true, block gas meter is tricky to support
 	// when executing transactions in parallel.
 	// when disabled, the block gas meter in context is a noop one.
@@ -282,6 +286,12 @@ func NewBaseApp(
 	app.startReactors()
 
 	return app
+}
+
+// UnsetBlockSTMTxRunner removes the BlockSTM TxRunner, restoring the built-in
+// sequential execution. Designed for post-construction use by InstrumentApp.
+func (app *BaseApp) UnsetBlockSTMTxRunner() {
+	app.txRunner = nil
 }
 
 // Name returns the name of the BaseApp.

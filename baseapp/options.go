@@ -340,10 +340,9 @@ func (app *BaseApp) SetMempool(mempool mempool.Mempool) {
 }
 
 // SetLifecycleObserver sets the LifecycleObserver for the BaseApp.
+// Unlike most setters, this does not check sealed — it is designed for
+// post-construction injection by external instrumentation (e.g., InstrumentApp).
 func (app *BaseApp) SetLifecycleObserver(obs lifecycle.LifecycleObserver) {
-	if app.sealed {
-		panic("SetLifecycleObserver() on sealed BaseApp")
-	}
 	app.observer = obs
 }
 

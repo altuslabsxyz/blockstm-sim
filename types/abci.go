@@ -1,7 +1,11 @@
 package types
 
 import (
+	"context"
+
 	abci "github.com/cometbft/cometbft/abci/types"
+
+	storetypes "cosmossdk.io/store/types"
 )
 
 // InitChainer initializes application state at genesis
@@ -81,3 +85,11 @@ func (r ResponsePreBlock) IsConsensusParamsChanged() bool {
 }
 
 type RunTx = func(txBytes []byte, tx Tx) (gInfo GasInfo, result *Result, anteEvents []abci.Event, err error)
+
+// DeliverTxFunc is the function called for each transaction to produce a single ExecTxResult.
+type DeliverTxFunc func(tx []byte, memTx Tx, ms storetypes.MultiStore, txIndex int, incarnationCache map[string]any) *abci.ExecTxResult
+
+// TxRunner executes transactions in a block, returning results for each.
+type TxRunner interface {
+	Run(ctx context.Context, ms storetypes.MultiStore, txs [][]byte, deliverTx DeliverTxFunc) ([]*abci.ExecTxResult, error)
+}
