@@ -7,6 +7,7 @@ require (
 	cosmossdk.io/log v1.6.0
 	cosmossdk.io/math v1.5.3
 	github.com/cometbft/cometbft v0.38.17
+	github.com/cosmos/btree v1.0.0
 	github.com/cosmos/cosmos-db v1.1.1
 	github.com/cosmos/cosmos-proto v1.0.0-beta.5
 	github.com/cosmos/gogoproto v1.7.0
@@ -17,7 +18,6 @@ require (
 	github.com/hashicorp/go-plugin v1.6.3
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/stretchr/testify v1.10.0
-	github.com/tidwall/btree v1.7.0
 	go.uber.org/mock v0.5.2
 	google.golang.org/grpc v1.72.2
 	google.golang.org/protobuf v1.36.6

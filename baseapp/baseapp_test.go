@@ -5,7 +5,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	baseapptestutil "github.com/cosmos/cosmos-sdk/baseapp/testutil"
+	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectestutil "github.com/cosmos/cosmos-sdk/codec/testutil"
@@ -48,10 +51,9 @@ var (
 
 type (
 	BaseAppSuite struct {
-		baseApp   *baseapp.BaseApp
-		cdc       *codec.ProtoCodec
-		txConfig  client.TxConfig
-		logBuffer *bytes.Buffer
+		baseApp  *baseapp.BaseApp
+		cdc      *codec.ProtoCodec
+		txConfig client.TxConfig
 	}
 
 	SnapshotsConfig struct {
@@ -71,8 +73,7 @@ func NewBaseAppSuite(t *testing.T, opts ...func(*baseapp.BaseApp)) *BaseAppSuite
 
 	txConfig := authtx.NewTxConfig(cdc, authtx.DefaultSignModes)
 	db := dbm.NewMemDB()
-	logBuffer := new(bytes.Buffer)
-	logger := log.NewLogger(logBuffer, log.ColorOption(false))
+	logger := log.NewLogger(os.Stdout, log.ColorOption(false))
 
 	app := baseapp.NewBaseApp(t.Name(), logger, db, txConfig.TxDecoder(), opts...)
 	require.Equal(t, t.Name(), app.Name())
@@ -88,10 +89,9 @@ func NewBaseAppSuite(t *testing.T, opts ...func(*baseapp.BaseApp)) *BaseAppSuite
 	require.Nil(t, app.LoadLatestVersion())
 
 	return &BaseAppSuite{
-		baseApp:   app,
-		cdc:       cdc,
-		txConfig:  txConfig,
-		logBuffer: logBuffer,
+		baseApp:  app,
+		cdc:      cdc,
+		txConfig: txConfig,
 	}
 }
 
@@ -456,6 +456,47 @@ func TestOptionFunction(t *testing.T) {
 	require.Equal(t, bap.Name(), "new name", "BaseApp should have had name changed via option function")
 }
 
+func TestBlockGasMeterParallelRunnerPanic(t *testing.T) {
+	db := dbm.NewMemDB()
+
+	testCases := []struct {
+		name     string
+		testFunc func(*testing.T, *baseapp.BaseApp)
+	}{
+		{
+			"panic on bstm + gas meter",
+			func(t *testing.T, bap *baseapp.BaseApp) {
+				t.Helper()
+				bap.SetBlockSTMTxRunner(txnrunner.NewSTMRunner(nil, nil, 0, true, nil))
+				require.Panics(t, func() { bap.SetDisableBlockGasMeter(false) })
+				require.Panics(t, func() { baseapp.EnableBlockGasMeter()(bap) })
+			},
+		},
+		{
+			"panic on gas meter + bstm",
+			func(t *testing.T, bap *baseapp.BaseApp) {
+				t.Helper()
+				bap.SetDisableBlockGasMeter(false)
+				require.Panics(t, func() { bap.SetBlockSTMTxRunner(txnrunner.NewSTMRunner(nil, nil, 0, true, nil)) })
+			},
+		},
+		{
+			"successful bstm parallelism",
+			func(t *testing.T, bap *baseapp.BaseApp) {
+				t.Helper()
+				require.NotPanics(t, func() { bap.SetBlockSTMTxRunner(txnrunner.NewSTMRunner(nil, nil, 0, true, nil)) })
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			bap := baseapp.NewBaseApp("foo", log.NewTestLogger(t), db, nil)
+			tc.testFunc(t, bap)
+		})
+	}
+}
+
 func TestBaseAppOptionSeal(t *testing.T) {
 	suite := NewBaseAppSuite(t)
 
@@ -687,9 +728,30 @@ func TestBaseAppPostHandler(t *testing.T) {
 	tx = wonkyMsg(t, suite.txConfig, tx)
 	txBytes, err = suite.txConfig.TxEncoder()(tx)
 	require.NoError(t, err)
-	_, err = suite.baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: 1, Txs: [][]byte{txBytes}})
+
+	output := captureStdout(t, func() {
+		_, err = suite.baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: 1, Txs: [][]byte{txBytes}})
+		require.NoError(t, err)
+	})
+	// Check the captured output
+	require.NotContains(t, output, "panic recovered in runTx")
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	fn()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, r)
 	require.NoError(t, err)
-	require.NotContains(t, suite.logBuffer.String(), "panic recovered in runTx")
+	return buf.String()
 }
 
 func TestBaseAppPostHandlerErrorHandling(t *testing.T) {
@@ -965,6 +1027,25 @@ func TestGetEmptyConsensusParams(t *testing.T) {
 	cp := suite.baseApp.GetConsensusParams(ctx)
 	require.Equal(t, cmtproto.ConsensusParams{}, cp)
 	require.Equal(t, uint64(0), suite.baseApp.GetMaximumBlockGas(ctx))
+}
+
+func TestMountStores(t *testing.T) {
+	logger := log.NewNopLogger()
+	db := dbm.NewMemDB()
+	name := t.Name()
+	app := baseapp.NewBaseApp(name, logger, db, nil)
+	kvKey := storetypes.NewKVStoreKey("kv")
+	transKey := storetypes.NewTransientStoreKey("trans")
+	memKey := storetypes.NewMemoryStoreKey("mem")
+	objKey := storetypes.NewObjectStoreKey("obj")
+	app.MountStores(kvKey, transKey, memKey, objKey)
+	objKey2 := storetypes.NewObjectStoreKey("obj2")
+	app.MountObjectStores(map[string]*storetypes.ObjectStoreKey{"obj2": objKey2})
+	require.NoError(t, app.LoadLatestVersion())
+	for _, keyName := range []storetypes.StoreKey{kvKey, transKey, memKey, objKey} {
+		require.NotNil(t, app.CommitMultiStore().GetStore(keyName))
+	}
+	require.NotNil(t, app.CommitMultiStore().GetStore(objKey2))
 }
 
 func TestLoadVersionPruning(t *testing.T) {
