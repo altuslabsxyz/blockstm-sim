@@ -8,6 +8,8 @@ replace cosmossdk.io/store => ../stable-sdk/store
 
 replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.20-stable
 
+replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.20-stable
+
 require (
 	cosmossdk.io/depinject v1.2.1
 	cosmossdk.io/log v1.6.1
