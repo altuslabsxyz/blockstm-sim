@@ -70,8 +70,8 @@ func NewCommand() *cobra.Command {
 
 			long, _ := cmd.Flags().GetBool("long")
 			if !long {
-				fmt.Fprintln(cmd.OutOrStdout(), verInfo.Version)
-				return nil
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), verInfo.Version)
+				return err
 			}
 
 			var (
@@ -90,8 +90,8 @@ func NewCommand() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintln(cmd.OutOrStdout(), string(bz))
-			return nil
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), string(bz))
+			return err
 		},
 	}
 
