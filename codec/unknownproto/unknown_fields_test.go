@@ -2,6 +2,7 @@ package unknownproto
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/cosmos/gogoproto/proto"
@@ -646,6 +647,123 @@ func TestRejectUnknownFieldsFlat(t *testing.T) {
 	}
 }
 
+func TestRejectUnknownFieldsDuplicate(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      []byte
+		recv    proto.Message
+		wantErr error
+	}{
+		{
+			name:    "Repeated scalar, shouldn't complain",
+			in:      concat(&testdata.TestRepeatedUints{Nums: []uint64{1, 2, 3}}),
+			recv:    new(testdata.TestRepeatedUints),
+			wantErr: nil,
+		},
+		{
+			name: "Duplicate singular, should fail",
+			in: concat(
+				&testdata.Customer1{Id: 1},
+				&testdata.Customer1{Id: 2},
+			),
+			recv: new(testdata.Customer1),
+			wantErr: &errDuplicatedField{
+				Type:      "*testdata.Customer1",
+				TagNum:    1,
+				FieldName: "id",
+			},
+		},
+		{
+			name: "Duplicate singular with canonical name after junk, should fail",
+			in: concat(
+				&testdata.Customer1{Name: strings.Repeat("A", 4096)},
+				&testdata.Customer1{Name: "Customer1"},
+			),
+			recv: new(testdata.Customer1),
+			wantErr: &errDuplicatedField{
+				Type:      "*testdata.Customer1",
+				TagNum:    2,
+				FieldName: "name",
+			},
+		},
+		{
+			name: "Duplicate singular submessage, should fail",
+			in: concat(
+				&testdata.TestVersion3{
+					A: &testdata.TestVersion3{
+						X: 1,
+					},
+				},
+				&testdata.TestVersion3{
+					A: &testdata.TestVersion3{
+						X: 1,
+					},
+				},
+			),
+			recv: new(testdata.TestVersion3),
+			wantErr: &errDuplicatedField{
+				Type:      "*testdata.TestVersion3",
+				TagNum:    2,
+				FieldName: "a",
+			},
+		},
+		{
+			name: "Duplicate singular Any envelope, should fail",
+			in: concat(
+				&testdata.TestVersion3{
+					G: &types.Any{
+						TypeUrl: "/testpb.TestVersion1",
+					},
+				},
+				&testdata.TestVersion3{
+					G: &types.Any{
+						TypeUrl: "/testpb.TestVersion1",
+					},
+				},
+			),
+			recv: new(testdata.TestVersion3),
+			wantErr: &errDuplicatedField{
+				Type:      "*testdata.TestVersion3",
+				TagNum:    8,
+				FieldName: "g",
+			},
+		},
+		{
+			name: "Duplicate inside Any envelope, should fail",
+			in: concat(
+				&testdata.TestVersion3{
+					G: &types.Any{
+						TypeUrl: "/testpb.TestVersion1",
+						Value: concat(
+							&testdata.TestVersion1{
+								X: 1,
+							},
+							&testdata.TestVersion1{
+								X: 1,
+							},
+						),
+					},
+				},
+			),
+			recv: new(testdata.TestVersion3),
+			wantErr: &errDuplicatedField{
+				Type:      "*testdata.TestVersion1",
+				TagNum:    1,
+				FieldName: "x",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotErr := RejectUnknownFieldsStrict(tt.in, tt.recv, DefaultAnyResolver{})
+			if !reflect.DeepEqual(gotErr, tt.wantErr) {
+				t.Fatalf("Error mismatch\nGot:\n%s\n\nWant:\n%s", gotErr, tt.wantErr)
+			}
+		})
+	}
+}
+
 // Issue https://github.com/cosmos/cosmos-sdk/issues/7222, we need to ensure that repeated
 // uint64 are recognized as packed.
 func TestPackedEncoding(t *testing.T) {
@@ -665,4 +783,16 @@ func mustMarshal(msg proto.Message) []byte {
 		panic(err)
 	}
 	return blob
+}
+
+func concat(msg ...proto.Message) []byte {
+	var result []byte
+	for _, m := range msg {
+		bz, err := proto.Marshal(m)
+		if err != nil {
+			panic(err)
+		}
+		result = append(result, bz...)
+	}
+	return result
 }

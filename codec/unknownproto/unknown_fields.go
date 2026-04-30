@@ -68,6 +68,8 @@ func doRejectUnknownFields(
 		return hasUnknownNonCriticals, err
 	}
 
+	seenFields := make(map[int32]bool, len(fieldDescProtoFromTagNum))
+
 	for len(bz) > 0 {
 		tagNum, wireType, m := protowire.ConsumeTag(bz)
 		if m < 0 {
@@ -85,6 +87,18 @@ func doRejectUnknownFields(
 					GotWireType:  wireType,
 					WantWireType: toProtowireType(fieldDescProto.GetType()),
 				}
+			}
+
+			// Assert the field has not been seen before.
+			if fieldDescProto.GetLabel() != descriptorpb.FieldDescriptorProto_LABEL_REPEATED {
+				if seenFields[int32(tagNum)] {
+					return hasUnknownNonCriticals, &errDuplicatedField{
+						Type:      reflect.ValueOf(msg).Type().String(),
+						TagNum:    tagNum,
+						FieldName: fieldDescProto.GetName(),
+					}
+				}
+				seenFields[int32(tagNum)] = true
 			}
 
 		default:
@@ -322,6 +336,25 @@ func wireTypeToString(wt protowire.Type) string {
 		return fmt.Sprintf("unknown type: %d", wt)
 	}
 }
+
+// errDuplicatedField represents an error indicating that we encountered
+// a duplicated field number in the bytes.
+type errDuplicatedField struct {
+	Type      string
+	TagNum    protowire.Number
+	FieldName string
+}
+
+func (df *errDuplicatedField) String() string {
+	return fmt.Sprintf("Duplicated field %q: {TagNum: %d, FieldName: %q}",
+		df.Type, df.TagNum, df.FieldName)
+}
+
+func (df *errDuplicatedField) Error() string {
+	return df.String()
+}
+
+var _ error = (*errDuplicatedField)(nil)
 
 // errUnknownField represents an error indicating that we encountered
 // a field that isn't available in the target proto.Message.
