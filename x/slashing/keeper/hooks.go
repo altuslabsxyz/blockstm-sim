@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/cometbft/cometbft/crypto"
@@ -60,6 +61,12 @@ func (h Hooks) AfterValidatorCreated(ctx context.Context, valAddr sdk.ValAddress
 	consPk, err := validator.ConsPubKey()
 	if err != nil {
 		return err
+	}
+
+	consAddr := sdk.ConsAddress(consPk.Address().Bytes())
+	signingInfo, _ := h.k.GetValidatorSigningInfo(ctx, consAddr)
+	if signingInfo.Tombstoned {
+		return fmt.Errorf("consensus address is tombstoned")
 	}
 
 	return h.k.AddPubkey(sdkCtx, consPk)

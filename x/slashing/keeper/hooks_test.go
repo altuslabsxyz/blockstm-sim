@@ -1,8 +1,11 @@
 package keeper_test
 
 import (
+	"time"
+
 	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
@@ -37,6 +40,35 @@ func (s *KeeperTestSuite) TestAfterValidatorCreatedOrRemoved() {
 
 	err = keeper.Hooks().AfterValidatorRemoved(ctx, sdk.ConsAddress(addr), nil)
 	require.NoError(err)
+
+	_, err = keeper.GetPubkey(ctx, addr.Bytes())
+	require.Error(err)
+}
+
+func (s *KeeperTestSuite) TestAfterValidatorCreatedRejectsTombstoned() {
+	ctx, keeper := s.ctx, s.slashingKeeper
+	require := s.Require()
+
+	_, pubKey, addr := testdata.KeyTestPubAddr()
+	valAddr := sdk.ValAddress(addr)
+	consAddr := sdk.ConsAddress(pubKey.Address().Bytes())
+
+	err := keeper.SetValidatorSigningInfo(ctx, consAddr, types.NewValidatorSigningInfo(
+		consAddr,
+		ctx.BlockHeight(),
+		0,
+		time.Unix(0, 0),
+		true,
+		0,
+	))
+	require.NoError(err)
+
+	validator, err := stakingtypes.NewValidator(valAddr.String(), pubKey, stakingtypes.Description{})
+	require.NoError(err)
+
+	s.stakingKeeper.EXPECT().Validator(ctx, valAddr).Return(validator, nil)
+	err = keeper.Hooks().AfterValidatorCreated(ctx, valAddr)
+	require.Error(err)
 
 	_, err = keeper.GetPubkey(ctx, addr.Bytes())
 	require.Error(err)
