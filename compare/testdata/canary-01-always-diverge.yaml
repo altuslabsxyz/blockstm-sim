@@ -1,0 +1,16 @@
+name: canary-01-always-diverge
+description: Canary fixture expected to produce DIVERGENCE
+kind: canary
+genesis:
+  accounts:
+    sender:
+      balance: "1000000stake"
+    receiver:
+      balance: "500000stake"
+blocks:
+  - txs:
+      - signer: sender
+        msg: bank-send
+        to: receiver
+        amount: "100stake"
+        gas: 200000
