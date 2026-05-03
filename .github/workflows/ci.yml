@@ -24,9 +24,10 @@ jobs:
         run: |
           go mod edit -dropreplace github.com/cosmos/cosmos-sdk
           go mod edit -dropreplace github.com/cometbft/cometbft
+          go mod edit -dropreplace cosmossdk.io/store
           go mod edit -require github.com/cosmos/cosmos-sdk@v0.50.13
-          # instrument/ requires stable-sdk fork; skip until upstream merge
-          rm -rf instrument/
+          # instrument/ and compare/ require stable-sdk fork; skip until upstream merge
+          rm -rf instrument/ compare/
           go mod tidy
 
       - name: Run linter
@@ -47,9 +48,10 @@ jobs:
         run: |
           go mod edit -dropreplace github.com/cosmos/cosmos-sdk
           go mod edit -dropreplace github.com/cometbft/cometbft
+          go mod edit -dropreplace cosmossdk.io/store
           go mod edit -require github.com/cosmos/cosmos-sdk@v0.50.13
-          # instrument/ requires stable-sdk fork; skip until upstream merge
-          rm -rf instrument/
+          # instrument/ and compare/ require stable-sdk fork; skip until upstream merge
+          rm -rf instrument/ compare/
           go mod tidy
 
       - name: Build (default)
