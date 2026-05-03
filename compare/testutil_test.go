@@ -1,6 +1,7 @@
 package compare_test
 
 import (
+	"crypto/sha256"
 	"math/rand"
 	"sort"
 	"testing"
@@ -73,7 +74,8 @@ func newAppPair(t *testing.T, accounts map[string]compare.AccountSpec) appPair {
 	keys := make(map[string]cryptotypes.PrivKey, len(accounts))
 	genAccounts := make([]simtestutil.GenesisAccount, 0, len(accounts))
 	for i, name := range names {
-		priv := secp256k1.GenPrivKey()
+		seed := sha256.Sum256([]byte("blockstm-sim:" + name))
+		priv := &secp256k1.PrivKey{Key: seed[:]}
 		keys[name] = priv
 
 		acc := authtypes.NewBaseAccount(
