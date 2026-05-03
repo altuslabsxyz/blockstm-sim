@@ -26,8 +26,8 @@ jobs:
           go mod edit -dropreplace github.com/cometbft/cometbft
           go mod edit -dropreplace cosmossdk.io/store
           go mod edit -require github.com/cosmos/cosmos-sdk@v0.50.13
-          # instrument/ and compare/ require stable-sdk fork; skip until upstream merge
-          rm -rf instrument/ compare/
+          # These packages require the stable-sdk fork; skip until upstream merge
+          rm -rf instrument/ compare/ run/ x/ cmd/ report/ recorder/
           go mod tidy
 
       - name: Run linter
@@ -50,23 +50,12 @@ jobs:
           go mod edit -dropreplace github.com/cometbft/cometbft
           go mod edit -dropreplace cosmossdk.io/store
           go mod edit -require github.com/cosmos/cosmos-sdk@v0.50.13
-          # instrument/ and compare/ require stable-sdk fork; skip until upstream merge
-          rm -rf instrument/ compare/
+          # These packages require the stable-sdk fork; skip until upstream merge
+          rm -rf instrument/ compare/ run/ x/ cmd/ report/ recorder/
           go mod tidy
 
-      - name: Build (default)
+      - name: Build
         run: go build ./...
-
-      - name: Build (simharness)
-        run: go build -tags simharness ./...
-
-      - name: Build (simharness + canary)
-        run: go build -tags "simharness simharness_canary" ./...
 
       - name: Test
         run: go test ./...
-
-      - name: Verify version command
-        run: |
-          go build -o blockstm-sim ./cmd/blockstm-sim
-          ./blockstm-sim version
