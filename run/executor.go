@@ -14,7 +14,6 @@ import (
 	sdkmath "cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/client"
-	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
@@ -62,10 +61,12 @@ func buildAppConfig() depinject.Config {
 }
 
 type FixtureExecutor struct {
-	oracle   *runtime.App
-	probe    *runtime.App
-	txConfig client.TxConfig
-	keys     map[string]cryptotypes.PrivKey
+	oracle      *runtime.App
+	probe       *runtime.App
+	txConfig    client.TxConfig
+	keys        map[string]cryptotypes.PrivKey
+	accountNums map[string]uint64
+	sequences   map[string]uint64
 }
 
 func NewFixtureExecutor() *FixtureExecutor {
@@ -76,11 +77,14 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	names := sortedAccountNames(genesis.Accounts)
 
 	keys := make(map[string]cryptotypes.PrivKey, len(genesis.Accounts))
+	accountNums := make(map[string]uint64, len(genesis.Accounts))
+	sequences := make(map[string]uint64, len(genesis.Accounts))
 	genAccounts := make([]simtestutil.GenesisAccount, 0, len(genesis.Accounts))
 
 	for i, name := range names {
-		priv := secp256k1.GenPrivKey()
+		priv := DeriveKey(name)
 		keys[name] = priv
+		accountNums[name] = uint64(i)
 
 		acc := authtypes.NewBaseAccount(
 			priv.PubKey().Address().Bytes(),
@@ -130,6 +134,8 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	e.probe = probeApp
 	e.txConfig = txCfg
 	e.keys = keys
+	e.accountNums = accountNums
+	e.sequences = sequences
 
 	return nil
 }
@@ -159,6 +165,8 @@ func (e *FixtureExecutor) Close() {
 	e.probe = nil
 	e.txConfig = nil
 	e.keys = nil
+	e.accountNums = nil
+	e.sequences = nil
 }
 
 func (e *FixtureExecutor) buildTx(spec compare.TxSpec) ([]byte, error) {
@@ -195,6 +203,10 @@ func (e *FixtureExecutor) buildTx(spec compare.TxSpec) ([]byte, error) {
 		}
 	}
 
+	accNum := e.accountNums[spec.Signer]
+	seq := e.sequences[spec.Signer]
+	e.sequences[spec.Signer] = seq + 1
+
 	tx, err := simtestutil.GenSignedMockTx(
 		rand.New(rand.NewSource(42)),
 		e.txConfig,
@@ -202,8 +214,8 @@ func (e *FixtureExecutor) buildTx(spec compare.TxSpec) ([]byte, error) {
 		sdk.NewCoins(sdk.NewCoin("stake", sdkmath.NewInt(0))),
 		spec.Gas,
 		"",
-		[]uint64{0},
-		[]uint64{0},
+		[]uint64{accNum},
+		[]uint64{seq},
 		fromKey,
 	)
 	if err != nil {
