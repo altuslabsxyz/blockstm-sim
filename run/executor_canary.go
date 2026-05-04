@@ -1,4 +1,4 @@
-//go:build simharness_canary
+//go:build sdk_hooks && simharness_canary
 
 package run
 
@@ -9,8 +9,8 @@ import (
 	"cosmossdk.io/core/appconfig"
 
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/testutil/configurator"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 	"github.com/altuslabsxyz/blockstm-sim/coverage"

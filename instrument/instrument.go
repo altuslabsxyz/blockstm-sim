@@ -1,3 +1,5 @@
+//go:build sdk_hooks
+
 package instrument
 
 import (
@@ -8,7 +10,7 @@ import (
 type RunnerMode int
 
 const (
-	RunnerSTM        RunnerMode = iota
+	RunnerSTM RunnerMode = iota
 	RunnerSequential
 )
 

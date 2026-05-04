@@ -1,3 +1,5 @@
+//go:build sdk_hooks
+
 package compare
 
 import (
@@ -9,11 +11,6 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/baseapp/lifecycle"
 )
-
-// WriteSetProvider returns the sorted write keys for a given transaction.
-type WriteSetProvider interface {
-	TxWriteSet(txIndex int) []string
-}
 
 // BlockObserver implements lifecycle.LifecycleObserver to capture per-transaction
 // KVStore write keys and out-of-KVStore field mutations during FinalizeBlock.

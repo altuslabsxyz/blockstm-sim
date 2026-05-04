@@ -1,4 +1,4 @@
-//go:build simharness_canary
+//go:build sdk_hooks && simharness_canary
 
 package run_test
 

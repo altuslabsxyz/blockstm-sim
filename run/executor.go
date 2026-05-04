@@ -1,3 +1,5 @@
+//go:build sdk_hooks
+
 package run
 
 import (
@@ -33,18 +35,8 @@ import (
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
-	"github.com/altuslabsxyz/blockstm-sim/coverage"
 	"github.com/altuslabsxyz/blockstm-sim/instrument"
 )
-
-func init() {
-	coverage.Register("bank-send", coverage.Entry{
-		Key:       "bank-send",
-		Module:    "bank",
-		MsgType:   "MsgSend",
-		HandlerFn: "Send",
-	})
-}
 
 type txBuilderFn func(spec compare.TxSpec, keys map[string]cryptotypes.PrivKey) ([]sdk.Msg, error)
 

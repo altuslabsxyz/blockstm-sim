@@ -1,4 +1,4 @@
-//go:build simharness_canary
+//go:build sdk_hooks && simharness_canary
 
 package simcanary_test
 
@@ -179,4 +179,3 @@ func sortedNames(m map[string]string) []string {
 	sort.Strings(keys)
 	return keys
 }
-
