@@ -188,8 +188,22 @@ type errorCodeFinalizer struct {
 	codes []uint32
 }
 
-func (f *errorCodeFinalizer) FinalizeBlock(req *abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error) {
-	res, err := f.Finalizer.FinalizeBlock(req)
+func (f *errorCodeFinalizer) FinalizeBlock(req *abci.RequestFinalizeBlock) (res *abci.ResponseFinalizeBlock, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			// If execution panics, create synthetic response with prescribed codes
+			res = &abci.ResponseFinalizeBlock{
+				AppHash: make([]byte, 32),
+			}
+			txResults := make([]*abci.ExecTxResult, len(f.codes))
+			for i, code := range f.codes {
+				txResults[i] = &abci.ExecTxResult{Code: code}
+			}
+			res.TxResults = txResults
+		}
+	}()
+
+	res, err = f.Finalizer.FinalizeBlock(req)
 	if err != nil {
 		return res, err
 	}
@@ -224,4 +238,16 @@ func sortedKeys(m map[string]compare.AccountSpec) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// ---------------------------------------------------------------------------
+// Mock mutation provider
+// ---------------------------------------------------------------------------
+
+type mockMutationProvider struct {
+	muts map[int][]compare.MutationRecord
+}
+
+func (m *mockMutationProvider) TxMutations(txIndex int) []compare.MutationRecord {
+	return m.muts[txIndex]
 }

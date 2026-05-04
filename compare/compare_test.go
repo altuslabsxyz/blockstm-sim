@@ -304,3 +304,71 @@ func TestFindingID_Deterministic(t *testing.T) {
 	id4 := compare.FindingID(1, compare.DimAppHash, 0, 0)
 	require.NotEqual(t, id1, id4, "different txIndex must produce different IDs")
 }
+
+// ---------------------------------------------------------------------------
+// Test 11: DimOutOfKVStore finding when oracle detects out-of-KVStore mutation
+// ---------------------------------------------------------------------------
+
+func TestRun_OutOfKVStoreMutation_Detected(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	oracleMuts := &mockMutationProvider{muts: map[int][]compare.MutationRecord{
+		0: {{Tracker: "simcanary.sharedMap", Before: []byte(""), After: []byte("k=42")}},
+	}}
+
+	result, err := compare.Run(compare.Input{
+		Oracle:          &errorCodeFinalizer{oracle, []uint32{0}},
+		Probe:           &errorCodeFinalizer{probe, []uint32{0}},
+		Block:           &abci.RequestFinalizeBlock{Height: 1, Txs: [][]byte{{0x00}}},
+		OracleMutations: oracleMuts,
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Divergence, result.Verdict)
+
+	var mutFindings []compare.Finding
+	for _, f := range result.Findings {
+		if f.Dimension == compare.DimOutOfKVStore {
+			mutFindings = append(mutFindings, f)
+		}
+	}
+	require.Len(t, mutFindings, 1)
+	require.Equal(t, 0, mutFindings[0].TxIndex)
+	require.Contains(t, mutFindings[0].Oracle, "simcanary.sharedMap")
+	require.Contains(t, mutFindings[0].Probe, "simcanary.sharedMap")
+}
+
+// ---------------------------------------------------------------------------
+// Test 12: No DimOutOfKVStore finding when no mutations detected
+// ---------------------------------------------------------------------------
+
+func TestRun_OutOfKVStoreMutation_NoMutation_NoFinding(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	oracleMuts := &mockMutationProvider{muts: map[int][]compare.MutationRecord{}}
+
+	result, err := compare.Run(compare.Input{
+		Oracle:          oracle,
+		Probe:           probe,
+		Block:           &abci.RequestFinalizeBlock{Height: 1},
+		OracleMutations: oracleMuts,
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Match, result.Verdict)
+	require.Empty(t, result.Findings)
+}
