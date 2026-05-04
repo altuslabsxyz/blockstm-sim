@@ -17,6 +17,9 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  STABLE_SDK_BRANCH: ${{ vars.STABLE_SDK_BRANCH || 'stable' }}
+
 jobs:
   simulate:
     runs-on: ubuntu-latest
@@ -31,7 +34,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.STABLE_SDK_REPO }}
-          ref: ${{ vars.STABLE_SDK_REF || 'feat/pla-55-stable-sdk-pr-4-scheduler-perturbhook' }}
+          ref: ${{ env.STABLE_SDK_BRANCH }}
           token: ${{ secrets.STABLE_SDK_TOKEN }}
           path: stable-sdk
 
