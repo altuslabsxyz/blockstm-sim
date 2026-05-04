@@ -32,7 +32,9 @@ type AccountSpec struct {
 }
 
 type BlockSpec struct {
-	Txs []TxSpec `json:"txs"`
+	Txs    []TxSpec `json:"txs,omitempty"`
+	RawTxs [][]byte `json:"raw_txs,omitempty"`
+	Height int64    `json:"height,omitempty"`
 }
 
 type TxSpec struct {
