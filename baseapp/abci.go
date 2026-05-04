@@ -925,14 +925,21 @@ func (app *BaseApp) executeTxsWithExecutor(ctx context.Context, ms storetypes.Mu
 		)
 	}
 
-	results, err := app.txRunner.Run(ctx, ms, txs, app.deliverTx)
-	if err != nil {
-		return nil, err
+	// Wrap deliverTx so the observer fires OnTxStart before and OnTxEnd after
+	// each individual transaction. This ordering is required for mutation
+	// trackers (F4) which snapshot out-of-KVStore state before each tx and
+	// diff the snapshot after. Without wrapping, the runner collects all
+	// results first and a post-hoc loop would snapshot already-mutated state.
+	observedDeliverTx := func(tx []byte, memTx sdk.Tx, mss storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
+		app.observer.OnTxStart(txIndex)
+		result := app.deliverTx(tx, memTx, mss, txIndex, cache)
+		app.observer.OnTxEnd(txIndex, result)
+		return result
 	}
 
-	for i, result := range results {
-		app.observer.OnTxStart(i)
-		app.observer.OnTxEnd(i, result)
+	results, err := app.txRunner.Run(ctx, ms, txs, observedDeliverTx)
+	if err != nil {
+		return nil, err
 	}
 
 	return results, nil
