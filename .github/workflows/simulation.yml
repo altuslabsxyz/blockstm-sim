@@ -29,7 +29,6 @@ jobs:
       PRIVATE_COMET_REPOSITORY: ${{ vars.PRIVATE_COMET_REPOSITORY }}
       PRIVATE_COMET_REF: ${{ vars.PRIVATE_COMET_REF }}
       PRIVATE_COMET_TOKEN: ${{ secrets.PRIVATE_COMET_TOKEN }}
-      PRIVATE_COMET_DIR: /tmp/private-comet
 
     steps:
       - name: Checkout blockstm-sim
@@ -50,22 +49,6 @@ jobs:
             "${PRIVATE_SDK_DIR}"
           git -C "${PRIVATE_SDK_DIR}" fetch --quiet --depth=1 origin "${PRIVATE_SDK_REF}"
           git -C "${PRIVATE_SDK_DIR}" checkout --quiet FETCH_HEAD
-
-      - name: Checkout consensus source
-        if: ${{ vars.PRIVATE_COMET_REPOSITORY != '' && vars.PRIVATE_COMET_REF != '' }}
-        run: |
-          set -euo pipefail
-          token="${PRIVATE_COMET_TOKEN:-${PRIVATE_SDK_TOKEN}}"
-          if [ -z "${token}" ]; then
-            echo "::error::A token is required to checkout the configured consensus source."
-            exit 1
-          fi
-          rm -rf "${PRIVATE_COMET_DIR}"
-          git clone --quiet --depth=1 \
-            "https://x-access-token:${token}@github.com/${PRIVATE_COMET_REPOSITORY}.git" \
-            "${PRIVATE_COMET_DIR}"
-          git -C "${PRIVATE_COMET_DIR}" fetch --quiet --depth=1 origin "${PRIVATE_COMET_REF}"
-          git -C "${PRIVATE_COMET_DIR}" checkout --quiet FETCH_HEAD
 
       - name: Verify SDK layout
         run: |
@@ -94,9 +77,6 @@ jobs:
           cp go.sum go.internal.sum
           go mod edit -modfile=go.internal.mod -replace github.com/cosmos/cosmos-sdk="${PRIVATE_SDK_DIR}"
           go mod edit -modfile=go.internal.mod -replace cosmossdk.io/store="${PRIVATE_SDK_DIR}/store"
-          if [ -d "${PRIVATE_COMET_DIR}" ]; then
-            go mod edit -modfile=go.internal.mod -replace github.com/cometbft/cometbft="${PRIVATE_COMET_DIR}"
-          fi
 
       - name: Build simharness+canary binary
         working-directory: blockstm-sim
