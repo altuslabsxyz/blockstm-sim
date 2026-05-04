@@ -82,6 +82,9 @@ func (e *RepeatRunExecutor) Init(genesis compare.GenesisSpec) error {
 // merged Result. F1 findings come from oracle vs probe[0]; F2 findings come
 // from probe[0] vs probe[i] for i > 0.
 func (e *RepeatRunExecutor) RunBlock(block compare.BlockSpec, height int64) (*compare.Result, error) {
+	// Build txs exactly once; all apps receive the same bytes.
+	// buildTx increments e.sequences as a side-effect, so this loop must
+	// run exactly once per RunBlock call to keep nonces correct across blocks.
 	var txs [][]byte
 	for _, spec := range block.Txs {
 		txBytes, err := buildTx(spec, e.txConfig, e.keys, e.accountNums, e.sequences)
