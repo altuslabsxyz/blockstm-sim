@@ -1,0 +1,56 @@
+name: 33-high-contention
+description: Eight txs in one block with hub as high-contention account
+genesis:
+  accounts:
+    hub:
+      balance: "5000000stake"
+    a1:
+      balance: "1000000stake"
+    a2:
+      balance: "1000000stake"
+    a3:
+      balance: "1000000stake"
+    a4:
+      balance: "1000000stake"
+blocks:
+  - txs:
+      - signer: a1
+        msg: bank-send
+        to: hub
+        amount: "100stake"
+        gas: 200000
+      - signer: a2
+        msg: bank-send
+        to: hub
+        amount: "200stake"
+        gas: 200000
+      - signer: a3
+        msg: bank-send
+        to: hub
+        amount: "300stake"
+        gas: 200000
+      - signer: a4
+        msg: bank-send
+        to: hub
+        amount: "400stake"
+        gas: 200000
+      - signer: hub
+        msg: bank-send
+        to: a1
+        amount: "50stake"
+        gas: 200000
+      - signer: hub
+        msg: bank-send
+        to: a2
+        amount: "60stake"
+        gas: 200000
+      - signer: hub
+        msg: bank-send
+        to: a3
+        amount: "70stake"
+        gas: 200000
+      - signer: hub
+        msg: bank-send
+        to: a4
+        amount: "80stake"
+        gas: 200000

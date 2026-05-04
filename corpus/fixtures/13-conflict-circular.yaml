@@ -1,0 +1,20 @@
+name: 13-conflict-circular
+description: Circular transfer between alice and bob in one block
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "1000000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "100stake"
+        gas: 200000
+      - signer: bob
+        msg: bank-send
+        to: alice
+        amount: "100stake"
+        gas: 200000

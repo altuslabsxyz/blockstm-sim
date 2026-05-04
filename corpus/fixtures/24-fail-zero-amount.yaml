@@ -1,0 +1,15 @@
+name: 24-fail-zero-amount
+description: Sender tries to send zero amount
+genesis:
+  accounts:
+    sender:
+      balance: "1000000stake"
+    receiver:
+      balance: "500000stake"
+blocks:
+  - txs:
+      - signer: sender
+        msg: bank-send
+        to: receiver
+        amount: "0stake"
+        gas: 200000

@@ -1,0 +1,27 @@
+name: 30-multiblock-sequential
+description: Three sequential blocks each with a single send from alice to bob
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "500000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "100stake"
+        gas: 200000
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "200stake"
+        gas: 200000
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "300stake"
+        gas: 200000

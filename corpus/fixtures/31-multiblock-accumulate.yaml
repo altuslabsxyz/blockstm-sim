@@ -1,0 +1,27 @@
+name: 31-multiblock-accumulate
+description: Alice sends to bob across two blocks, then bob sends back in block three
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "100000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "100000stake"
+        gas: 200000
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "100000stake"
+        gas: 200000
+  - txs:
+      - signer: bob
+        msg: bank-send
+        to: alice
+        amount: "150000stake"
+        gas: 200000

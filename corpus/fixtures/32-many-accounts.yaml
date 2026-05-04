@@ -1,0 +1,51 @@
+name: 32-many-accounts
+description: Ten accounts with five independent transfers in one block
+genesis:
+  accounts:
+    a01:
+      balance: "1000000stake"
+    a02:
+      balance: "1000000stake"
+    a03:
+      balance: "1000000stake"
+    a04:
+      balance: "1000000stake"
+    a05:
+      balance: "1000000stake"
+    a06:
+      balance: "1000000stake"
+    a07:
+      balance: "1000000stake"
+    a08:
+      balance: "1000000stake"
+    a09:
+      balance: "1000000stake"
+    a10:
+      balance: "1000000stake"
+blocks:
+  - txs:
+      - signer: a01
+        msg: bank-send
+        to: a02
+        amount: "100stake"
+        gas: 200000
+      - signer: a03
+        msg: bank-send
+        to: a04
+        amount: "100stake"
+        gas: 200000
+      - signer: a05
+        msg: bank-send
+        to: a06
+        amount: "100stake"
+        gas: 200000
+      - signer: a07
+        msg: bank-send
+        to: a08
+        amount: "100stake"
+        gas: 200000
+      - signer: a09
+        msg: bank-send
+        to: a10
+        amount: "100stake"
+        gas: 200000

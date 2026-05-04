@@ -1,0 +1,22 @@
+name: 23-fail-all-fail
+description: Both txs fail due to insufficient balance
+genesis:
+  accounts:
+    alice:
+      balance: "500stake"
+    bob:
+      balance: "500stake"
+    carol:
+      balance: "500000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: carol
+        amount: "1000stake"
+        gas: 200000
+      - signer: bob
+        msg: bank-send
+        to: carol
+        amount: "1000stake"
+        gas: 200000

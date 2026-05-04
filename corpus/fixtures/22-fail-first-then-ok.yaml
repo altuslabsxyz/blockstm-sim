@@ -1,0 +1,22 @@
+name: 22-fail-first-then-ok
+description: First tx fails due to insufficient balance, second tx succeeds
+genesis:
+  accounts:
+    alice:
+      balance: "500stake"
+    bob:
+      balance: "1000000stake"
+    carol:
+      balance: "500000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: carol
+        amount: "1000stake"
+        gas: 200000
+      - signer: bob
+        msg: bank-send
+        to: carol
+        amount: "100stake"
+        gas: 200000

@@ -1,0 +1,29 @@
+name: 14-conflict-three-to-one
+description: Three senders all send to one hub account in one block
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "1000000stake"
+    carol:
+      balance: "1000000stake"
+    hub:
+      balance: "100000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: hub
+        amount: "100stake"
+        gas: 200000
+      - signer: bob
+        msg: bank-send
+        to: hub
+        amount: "100stake"
+        gas: 200000
+      - signer: carol
+        msg: bank-send
+        to: hub
+        amount: "100stake"
+        gas: 200000

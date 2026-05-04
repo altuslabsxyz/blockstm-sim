@@ -1,0 +1,10 @@
+name: 34-empty-block
+description: Single block with no transactions
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "500000stake"
+blocks:
+  - txs: []

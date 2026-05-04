@@ -1,0 +1,29 @@
+name: 15-conflict-fan-out
+description: Hub fans out sends to three receivers in one block
+genesis:
+  accounts:
+    hub:
+      balance: "3000000stake"
+    bob:
+      balance: "100000stake"
+    carol:
+      balance: "100000stake"
+    dave:
+      balance: "100000stake"
+blocks:
+  - txs:
+      - signer: hub
+        msg: bank-send
+        to: bob
+        amount: "100stake"
+        gas: 200000
+      - signer: hub
+        msg: bank-send
+        to: carol
+        amount: "200stake"
+        gas: 200000
+      - signer: hub
+        msg: bank-send
+        to: dave
+        amount: "300stake"
+        gas: 200000

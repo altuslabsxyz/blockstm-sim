@@ -1,0 +1,22 @@
+name: 11-conflict-same-receiver
+description: Two different senders send to the same receiver in one block
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "1000000stake"
+    carol:
+      balance: "100000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: carol
+        amount: "100stake"
+        gas: 200000
+      - signer: bob
+        msg: bank-send
+        to: carol
+        amount: "200stake"
+        gas: 200000

@@ -1,0 +1,15 @@
+name: 20-fail-insufficient-balance
+description: Sender tries to send more than their balance
+genesis:
+  accounts:
+    sender:
+      balance: "500stake"
+    receiver:
+      balance: "500000stake"
+blocks:
+  - txs:
+      - signer: sender
+        msg: bank-send
+        to: receiver
+        amount: "1000stake"
+        gas: 200000
