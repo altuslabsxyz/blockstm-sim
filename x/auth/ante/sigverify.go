@@ -406,7 +406,6 @@ func (svd SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simul
 					errMsg = fmt.Sprintf("signature verification failed; please verify account number (%d) and chain-id (%s): (%s)", accNum, chainID, err.Error())
 				}
 				return ctx, errorsmod.Wrap(sdkerrors.ErrUnauthorized, errMsg)
-
 			}
 		}
 	}

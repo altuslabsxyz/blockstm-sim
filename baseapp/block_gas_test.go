@@ -100,6 +100,7 @@ func TestBaseApp_BlockGas(t *testing.T) {
 		require.NoError(t, err)
 
 		bapp := appBuilder.Build(dbm.NewMemDB(), nil)
+		bapp.SetDisableBlockGasMeter(false)
 		err = bapp.Load(true)
 		require.NoError(t, err)
 
@@ -174,7 +175,7 @@ func TestBaseApp_BlockGas(t *testing.T) {
 				require.Equal(t, []byte("ok"), okValue)
 			}
 			// check block gas is always consumed
-			baseGas := uint64(60531) // baseGas is the gas consumed before tx msg
+			baseGas := uint64(61386) // baseGas is the gas consumed before tx msg
 			expGasConsumed := min(addUint64Saturating(tc.gasToConsume, baseGas), uint64(simtestutil.DefaultConsensusParams.Block.MaxGas))
 			require.Equal(t, int(expGasConsumed), int(ctx.BlockGasMeter().GasConsumed()))
 			// tx fee is always deducted

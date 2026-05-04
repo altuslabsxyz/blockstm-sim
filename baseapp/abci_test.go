@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -53,6 +54,30 @@ func (m mockABCIListener) ListenFinalizeBlock(_ context.Context, _ abci.RequestF
 
 func (m *mockABCIListener) ListenCommit(ctx context.Context, commit abci.ResponseCommit, pairs []*storetypes.StoreKVPair) error {
 	return m.ListenCommitFn(ctx, commit, pairs)
+}
+
+type recordingObserver struct {
+	events *[]string
+}
+
+func (r *recordingObserver) OnFinalizeBlockStart(height int64) {
+	*r.events = append(*r.events, fmt.Sprintf("OnFinalizeBlockStart:%d", height))
+}
+
+func (r *recordingObserver) OnFinalizeBlockEnd(_ []byte) {
+	*r.events = append(*r.events, "OnFinalizeBlockEnd")
+}
+
+func (r *recordingObserver) OnTxStart(txIndex int) {
+	*r.events = append(*r.events, fmt.Sprintf("OnTxStart:%d", txIndex))
+}
+
+func (r *recordingObserver) OnTxEnd(txIndex int, _ *abci.ExecTxResult) {
+	*r.events = append(*r.events, fmt.Sprintf("OnTxEnd:%d", txIndex))
+}
+
+func (r *recordingObserver) OnKVWrite(_ string, _ []byte, _ int) {
+	*r.events = append(*r.events, "OnKVWrite")
 }
 
 func TestABCI_Info(t *testing.T) {
@@ -1030,6 +1055,7 @@ func TestABCI_TxGasLimits(t *testing.T) {
 func TestABCI_MaxBlockGasLimits(t *testing.T) {
 	gasGranted := uint64(10)
 	anteOpt := func(bapp *baseapp.BaseApp) {
+		baseapp.EnableBlockGasMeter()(bapp)
 		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, err error) {
 			newCtx = ctx.WithGasMeter(storetypes.NewGasMeter(gasGranted))
 
@@ -2520,6 +2546,64 @@ func TestABCI_Proposal_FailReCheckTx(t *testing.T) {
 	require.True(t, res.TxResults[0].IsOK(), fmt.Sprintf("%v", res))
 }
 
+func TestLifecycleObserverHookSequence(t *testing.T) {
+	var events []string
+
+	obs := &recordingObserver{events: &events}
+
+	suite := NewBaseAppSuite(t, baseapp.SetLifecycleObserver(obs))
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	res, err := suite.baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{
+		Height: 1,
+		Txs:    [][]byte{[]byte("tx0"), []byte("tx1")},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	expected := []string{
+		"OnFinalizeBlockStart:1",
+		"OnTxStart:0",
+		"OnTxEnd:0",
+		"OnTxStart:1",
+		"OnTxEnd:1",
+		"OnFinalizeBlockEnd",
+	}
+	require.Equal(t, expected, events)
+}
+
+func TestSetLifecycleObserverPostSeal(t *testing.T) {
+	suite := NewBaseAppSuite(t)
+
+	_, err := suite.baseApp.InitChain(&abci.RequestInitChain{
+		ConsensusParams: &cmtproto.ConsensusParams{},
+	})
+	require.NoError(t, err)
+
+	var events []string
+	obs := &recordingObserver{events: &events}
+
+	require.NotPanics(t, func() {
+		suite.baseApp.SetLifecycleObserver(obs)
+	})
+
+	res, err := suite.baseApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: 1})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Contains(t, events, "OnFinalizeBlockStart:1")
+}
+
+func TestUnsetBlockSTMTxRunner(t *testing.T) {
+	suite := NewBaseAppSuite(t)
+	require.NotPanics(t, func() {
+		suite.baseApp.UnsetBlockSTMTxRunner()
+	})
+}
+
 func TestFinalizeBlockDeferResponseHandle(t *testing.T) {
 	suite := NewBaseAppSuite(t, baseapp.SetHaltHeight(1), func(ba *baseapp.BaseApp) {
 		ba.SetStreamingManager(storetypes.StreamingManager{
@@ -2534,4 +2618,52 @@ func TestFinalizeBlockDeferResponseHandle(t *testing.T) {
 	})
 	require.Empty(t, res)
 	require.NotEmpty(t, err)
+}
+
+func TestABCI_Race_Commit_Query(t *testing.T) {
+	suite := NewBaseAppSuite(t, baseapp.SetChainID("test-chain-id"))
+	app := suite.baseApp
+
+	_, err := app.InitChain(&abci.RequestInitChain{
+		ChainId:         "test-chain-id",
+		ConsensusParams: &cmtproto.ConsensusParams{Block: &cmtproto.BlockParams{MaxGas: 5000000}},
+		InitialHeight:   1,
+	})
+	require.NoError(t, err)
+	_, err = app.Commit()
+	require.NoError(t, err)
+
+	counter := atomic.Uint64{}
+	counter.Store(0)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	queryCreator := func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				_, err := app.CreateQueryContextWithCheckHeader(0, false, false)
+				require.NoError(t, err)
+
+				counter.Add(1)
+			}
+		}
+	}
+
+	for i := 0; i < 100; i++ {
+		go queryCreator()
+	}
+
+	for i := 0; i < 1000; i++ {
+		_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{Height: app.LastBlockHeight() + 1})
+		require.NoError(t, err)
+
+		_, err = app.Commit()
+		require.NoError(t, err)
+	}
+
+	cancel()
+
+	require.Equal(t, int64(1001), app.GetContextForCheckTx(nil).BlockHeight())
 }

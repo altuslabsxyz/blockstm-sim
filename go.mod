@@ -1,4 +1,4 @@
-go 1.23.2
+go 1.25.0
 
 module github.com/cosmos/cosmos-sdk
 
@@ -13,6 +13,7 @@ require (
 	cosmossdk.io/store v1.1.2
 	cosmossdk.io/x/tx v0.14.0
 	github.com/99designs/keyring v1.2.1
+	github.com/RoaringBitmap/roaring/v2 v2.14.4
 	github.com/bgentry/speakeasy v0.2.0
 	github.com/bits-and-blooms/bitset v1.24.3
 	github.com/chzyer/readline v1.5.1
@@ -20,6 +21,7 @@ require (
 	github.com/cockroachdb/errors v1.12.0
 	github.com/cometbft/cometbft v0.38.20
 	github.com/cosmos/btcutil v1.0.5
+	github.com/cosmos/btree v1.0.0
 	github.com/cosmos/cosmos-db v1.1.3
 	github.com/cosmos/cosmos-proto v1.0.0-beta.5
 	github.com/cosmos/go-bip39 v1.0.0
@@ -53,6 +55,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tendermint/go-amino v0.16.0
+	github.com/test-go/testify v1.1.4
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.41.0
 	golang.org/x/sync v0.16.0
@@ -128,9 +131,9 @@ require (
 	github.com/linxGnu/grocksdb v1.8.14 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/minio/highwayhash v1.0.3 // indirect
+	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nxadm/tail v1.4.11 // indirect
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -174,9 +177,7 @@ require (
 
 // Here are the short-lived replace from the Cosmos SDK
 // Replace here are pending PRs, or version to be tagged
-// replace (
-// 	<temporary replace>
-// )
+replace cosmossdk.io/store => ./store
 
 replace github.com/cometbft/cometbft => github.com/stablelabs/stable-bft v0.38.20-stable
 

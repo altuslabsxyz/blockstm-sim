@@ -13,7 +13,9 @@ import (
 	snapshottypes "cosmossdk.io/store/snapshots/types"
 	storetypes "cosmossdk.io/store/types"
 
+	"github.com/cosmos/cosmos-sdk/baseapp/lifecycle"
 	"github.com/cosmos/cosmos-sdk/baseapp/oe"
+	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -44,7 +46,7 @@ func SetQueryGasLimit(queryGasLimit uint64) func(*BaseApp) {
 		queryGasLimit = math.MaxUint64
 	}
 
-	return func(bapp *BaseApp) { bapp.queryGasLimit = queryGasLimit }
+	return func(bapp *BaseApp) { bapp.gasConfig.QueryGasLimit = queryGasLimit }
 }
 
 // SetHaltHeight returns a BaseApp option function that sets the halt block height.
@@ -117,6 +119,11 @@ func SetStoreLoader(loader StoreLoader) func(*BaseApp) {
 	return func(app *BaseApp) { app.SetStoreLoader(loader) }
 }
 
+// SetLifecycleObserver sets the LifecycleObserver on BaseApp.
+func SetLifecycleObserver(obs lifecycle.LifecycleObserver) func(*BaseApp) {
+	return func(app *BaseApp) { app.SetLifecycleObserver(obs) }
+}
+
 // SetOptimisticExecution enables optimistic execution.
 func SetOptimisticExecution(opts ...func(*oe.OptimisticExecution)) func(*BaseApp) {
 	return func(app *BaseApp) {
@@ -124,9 +131,18 @@ func SetOptimisticExecution(opts ...func(*oe.OptimisticExecution)) func(*BaseApp
 	}
 }
 
-// DisableBlockGasMeter disables the block gas meter.
-func DisableBlockGasMeter() func(*BaseApp) {
-	return func(app *BaseApp) { app.SetDisableBlockGasMeter(true) }
+// SetBlockSTMTxRunner sets the block stm tx runner for the BaseApp for parallel execution.
+func (app *BaseApp) SetBlockSTMTxRunner(txRunner sdk.TxRunner) {
+	if _, ok := txRunner.(*txnrunner.STMRunner); ok && !app.disableBlockGasMeter {
+		// This combination results in indeterminism
+		panic("Cannot configure parallel execution while block gas meter is enabled")
+	}
+	app.txRunner = txRunner
+}
+
+// EnableBlockGasMeter enables the block gas meter.
+func EnableBlockGasMeter() func(*BaseApp) {
+	return func(app *BaseApp) { app.SetDisableBlockGasMeter(false) }
 }
 
 func (app *BaseApp) SetName(name string) {
@@ -180,11 +196,11 @@ func (app *BaseApp) SetInitChainer(initChainer sdk.InitChainer) {
 		panic("SetInitChainer() on sealed BaseApp")
 	}
 
-	app.initChainer = initChainer
+	app.abciHandlers.InitChainer = initChainer
 }
 
 func (app *BaseApp) PreBlocker() sdk.PreBlocker {
-	return app.preBlocker
+	return app.abciHandlers.PreBlocker
 }
 
 func (app *BaseApp) SetPreBlocker(preBlocker sdk.PreBlocker) {
@@ -192,7 +208,7 @@ func (app *BaseApp) SetPreBlocker(preBlocker sdk.PreBlocker) {
 		panic("SetPreBlocker() on sealed BaseApp")
 	}
 
-	app.preBlocker = preBlocker
+	app.abciHandlers.PreBlocker = preBlocker
 }
 
 func (app *BaseApp) SetBeginBlocker(beginBlocker sdk.BeginBlocker) {
@@ -200,7 +216,7 @@ func (app *BaseApp) SetBeginBlocker(beginBlocker sdk.BeginBlocker) {
 		panic("SetBeginBlocker() on sealed BaseApp")
 	}
 
-	app.beginBlocker = beginBlocker
+	app.abciHandlers.BeginBlocker = beginBlocker
 }
 
 func (app *BaseApp) SetEndBlocker(endBlocker sdk.EndBlocker) {
@@ -208,7 +224,7 @@ func (app *BaseApp) SetEndBlocker(endBlocker sdk.EndBlocker) {
 		panic("SetEndBlocker() on sealed BaseApp")
 	}
 
-	app.endBlocker = endBlocker
+	app.abciHandlers.EndBlocker = endBlocker
 }
 
 func (app *BaseApp) SetPrepareCheckStater(prepareCheckStater sdk.PrepareCheckStater) {
@@ -216,7 +232,7 @@ func (app *BaseApp) SetPrepareCheckStater(prepareCheckStater sdk.PrepareCheckSta
 		panic("SetPrepareCheckStater() on sealed BaseApp")
 	}
 
-	app.prepareCheckStater = prepareCheckStater
+	app.abciHandlers.PrepareCheckStater = prepareCheckStater
 }
 
 func (app *BaseApp) SetPrecommiter(precommiter sdk.Precommiter) {
@@ -224,7 +240,7 @@ func (app *BaseApp) SetPrecommiter(precommiter sdk.Precommiter) {
 		panic("SetPrecommiter() on sealed BaseApp")
 	}
 
-	app.precommiter = precommiter
+	app.abciHandlers.Precommiter = precommiter
 }
 
 func (app *BaseApp) SetAnteHandler(ah sdk.AnteHandler) {
@@ -333,12 +349,19 @@ func (app *BaseApp) SetMempool(mempool mempool.Mempool) {
 	app.mempool = mempool
 }
 
+// SetLifecycleObserver sets the LifecycleObserver for the BaseApp.
+// Unlike most setters, this does not check sealed — it is designed for
+// post-construction injection by external instrumentation (e.g., InstrumentApp).
+func (app *BaseApp) SetLifecycleObserver(obs lifecycle.LifecycleObserver) {
+	app.observer = obs
+}
+
 // SetProcessProposal sets the process proposal function for the BaseApp.
 func (app *BaseApp) SetProcessProposal(handler sdk.ProcessProposalHandler) {
 	if app.sealed {
 		panic("SetProcessProposal() on sealed BaseApp")
 	}
-	app.processProposal = handler
+	app.abciHandlers.ProcessProposalHandler = handler
 }
 
 // SetPrepareProposal sets the prepare proposal function for the BaseApp.
@@ -347,16 +370,16 @@ func (app *BaseApp) SetPrepareProposal(handler sdk.PrepareProposalHandler) {
 		panic("SetPrepareProposal() on sealed BaseApp")
 	}
 
-	app.prepareProposal = handler
+	app.abciHandlers.PrepareProposalHandler = handler
 }
 
-// SetCheckTx sets the checkTx function for the BaseApp.
+// SetCheckTxHandler sets the checkTx function for the BaseApp.
 func (app *BaseApp) SetCheckTxHandler(handler sdk.CheckTxHandler) {
 	if app.sealed {
 		panic("SetCheckTxHandler() on sealed BaseApp")
 	}
 
-	app.checkTxHandler = handler
+	app.abciHandlers.CheckTxHandler = handler
 }
 
 func (app *BaseApp) SetExtendVoteHandler(handler sdk.ExtendVoteHandler) {
@@ -364,7 +387,7 @@ func (app *BaseApp) SetExtendVoteHandler(handler sdk.ExtendVoteHandler) {
 		panic("SetExtendVoteHandler() on sealed BaseApp")
 	}
 
-	app.extendVote = handler
+	app.abciHandlers.ExtendVoteHandler = handler
 }
 
 func (app *BaseApp) SetVerifyVoteExtensionHandler(handler sdk.VerifyVoteExtensionHandler) {
@@ -372,7 +395,7 @@ func (app *BaseApp) SetVerifyVoteExtensionHandler(handler sdk.VerifyVoteExtensio
 		panic("SetVerifyVoteExtensionHandler() on sealed BaseApp")
 	}
 
-	app.verifyVoteExt = handler
+	app.abciHandlers.VerifyVoteExtensionHandler = handler
 }
 
 // SetStoreMetrics sets the prepare proposal function for the BaseApp.
@@ -391,6 +414,10 @@ func (app *BaseApp) SetStreamingManager(manager storetypes.StreamingManager) {
 
 // SetDisableBlockGasMeter sets the disableBlockGasMeter flag for the BaseApp.
 func (app *BaseApp) SetDisableBlockGasMeter(disableBlockGasMeter bool) {
+	if _, ok := app.txRunner.(*txnrunner.STMRunner); ok && !disableBlockGasMeter {
+		// This combination results in indeterminism
+		panic("Cannot enable block gas meter while parallel execution is configured")
+	}
 	app.disableBlockGasMeter = disableBlockGasMeter
 }
 
