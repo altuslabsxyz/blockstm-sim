@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/report"
 	"github.com/altuslabsxyz/blockstm-sim/run"
 )
 
@@ -81,7 +82,8 @@ func TestHarness_AllOK(t *testing.T) {
 	}}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), out, errOut)
+	rep := report.NewCLI(out, errOut)
+	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), rep, errOut)
 
 	require.Equal(t, 0, code)
 	require.Contains(t, out.String(), "2 blocks run / 2 ok / 0 divergence")
@@ -99,7 +101,8 @@ func TestHarness_DivergenceNoFlag(t *testing.T) {
 	}}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), out, errOut)
+	rep := report.NewCLI(out, errOut)
+	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), rep, errOut)
 
 	require.Equal(t, 0, code)
 	require.Contains(t, out.String(), "DIVERGENCE 01-test")
@@ -115,7 +118,8 @@ func TestHarness_DivergenceWithFlag(t *testing.T) {
 	}}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1, FailOnDivergence: true}, exec, loadStores(t, dir), out, errOut)
+	rep := report.NewCLI(out, errOut)
+	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1, FailOnDivergence: true}, exec, loadStores(t, dir), rep, errOut)
 
 	require.Equal(t, 1, code)
 	require.Contains(t, out.String(), "Exit: 1")
@@ -130,7 +134,8 @@ func TestHarness_CanaryExpected(t *testing.T) {
 	}}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), out, errOut)
+	rep := report.NewCLI(out, errOut)
+	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), rep, errOut)
 
 	require.Equal(t, 0, code)
 	require.Contains(t, out.String(), "1 canary expected")
@@ -146,7 +151,8 @@ func TestHarness_CanaryMissed(t *testing.T) {
 	}}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), out, errOut)
+	rep := report.NewCLI(out, errOut)
+	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), rep, errOut)
 
 	require.Equal(t, 1, code)
 	require.Contains(t, out.String(), "CANARY MISSED canary-01")
@@ -164,7 +170,8 @@ func TestHarness_MixedScenario(t *testing.T) {
 	}}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), out, errOut)
+	rep := report.NewCLI(out, errOut)
+	code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), rep, errOut)
 
 	require.Equal(t, 0, code)
 	require.Contains(t, out.String(), "ok 01-normal")
@@ -174,7 +181,8 @@ func TestHarness_MixedScenario(t *testing.T) {
 
 func TestHarness_EmptyStores(t *testing.T) {
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	code := run.RunHarness(run.Config{CorpusDir: "/nonexistent"}, nil, nil, out, errOut)
+	rep := report.NewCLI(out, errOut)
+	code := run.RunHarness(run.Config{CorpusDir: "/nonexistent"}, nil, nil, rep, errOut)
 
 	require.Equal(t, 0, code)
 }
