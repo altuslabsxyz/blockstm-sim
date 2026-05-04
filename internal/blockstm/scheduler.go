@@ -27,6 +27,19 @@ func (t *TxDependency) Swap(new []TxnIndex) []TxnIndex {
 	return old
 }
 
+// SchedulerOption configures a Scheduler.
+type SchedulerOption func(*Scheduler)
+
+// WithHook installs a hook that fires at each phase boundary.
+// The hook receives the phase name: "NextTask", "FinishExecution",
+// "TryValidationAbort", or "FinishValidation".
+// The hook must be goroutine-safe; it is called from concurrent executor goroutines.
+func WithHook(hook func(string)) SchedulerOption {
+	return func(s *Scheduler) {
+		s.hook = hook
+	}
+}
+
 // Scheduler implements the scheduler for the block-stm
 // ref: `Algorithm 4 The Scheduler module, variables, utility APIs and next task logic`
 type Scheduler struct {
@@ -43,6 +56,9 @@ type Scheduler struct {
 	// Marker for completion
 	doneMarker atomic.Bool
 
+	// hook is an optional callback fired at each phase boundary. nil means disabled.
+	hook func(string)
+
 	// txnIdx to a mutex-protected set of dependent transaction indices
 	txnDependency []TxDependency
 	// txnIdx to a mutex-protected pair (incarnationNumber, status), where status ∈ {READY_TO_EXECUTE, EXECUTING, EXECUTED, ABORTING, SUSPENDED}.
@@ -53,11 +69,21 @@ type Scheduler struct {
 	validatedTxns atomic.Int64
 }
 
-func NewScheduler(blockSize int) *Scheduler {
-	return &Scheduler{
+func NewScheduler(blockSize int, opts ...SchedulerOption) *Scheduler {
+	s := &Scheduler{
 		blockSize:     blockSize,
 		txnDependency: make([]TxDependency, blockSize),
 		txnStatus:     make([]StatusEntry, blockSize),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+func (s *Scheduler) maybeHook(phase string) {
+	if s.hook != nil {
+		s.hook(phase)
 	}
 }
 
@@ -131,6 +157,7 @@ func (s *Scheduler) TryValidateNextVersion(idxToValidate uint64) (TxnVersion, bo
 //
 // Invariant `numActiveTasks`: increased if a valid task is returned.
 func (s *Scheduler) NextTask() (TxnVersion, TaskKind) {
+	s.maybeHook("NextTask")
 	validationIdx := s.validationIdx.Load()
 	executionIdx := s.executionIdx.Load()
 
@@ -175,6 +202,7 @@ func (s *Scheduler) ResumeDependencies(txns []TxnIndex) {
 // FinishExecution marks an execution task as complete.
 // Invariant `numActiveTasks`: decreased if an invalid task is returned.
 func (s *Scheduler) FinishExecution(version TxnVersion, wroteNewPath bool) (TxnVersion, TaskKind) {
+	s.maybeHook("FinishExecution")
 	s.txnStatus[version.Index].SetExecuted()
 
 	deps := s.txnDependency[version.Index].Swap(nil)
@@ -192,12 +220,14 @@ func (s *Scheduler) FinishExecution(version TxnVersion, wroteNewPath bool) (TxnV
 }
 
 func (s *Scheduler) TryValidationAbort(version TxnVersion) bool {
+	s.maybeHook("TryValidationAbort")
 	return s.txnStatus[version.Index].TryValidationAbort(version.Incarnation)
 }
 
 // FinishValidation marks a validation task as complete.
 // Invariant `numActiveTasks`: decreased if an invalid task is returned.
 func (s *Scheduler) FinishValidation(txn TxnIndex, aborted bool) (TxnVersion, TaskKind) {
+	s.maybeHook("FinishValidation")
 	if aborted {
 		s.txnStatus[txn].SetReadyStatus()
 		s.DecreaseValidationIdx(txn + 1)
