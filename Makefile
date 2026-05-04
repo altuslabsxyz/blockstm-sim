@@ -10,7 +10,7 @@ LDFLAGS := -X github.com/altuslabsxyz/blockstm-sim/version.Version=$(VERSION) \
 
 BUILD_FLAGS := -tags "$(BUILD_TAGS)" -ldflags '$(LDFLAGS)'
 
-.PHONY: build build-simharness build-canary test lint clean
+.PHONY: build build-simharness build-canary test test-canary lint clean
 
 build:
 	go build $(BUILD_FLAGS) -o build/blockstm-sim ./cmd/blockstm-sim
@@ -23,6 +23,9 @@ build-canary:
 
 test:
 	go test ./...
+
+test-canary:
+	go test -tags "simharness simharness_canary" -v -count=1 ./...
 
 lint:
 	golangci-lint run ./...
