@@ -22,8 +22,8 @@ type MsgCanaryMapSet struct {
 
 var _ proto.Message = (*MsgCanaryMapSet)(nil)
 
-func (*MsgCanaryMapSet) ProtoMessage()             {}
-func (*MsgCanaryMapSet) Reset()                     {}
+func (*MsgCanaryMapSet) ProtoMessage()               {}
+func (*MsgCanaryMapSet) Reset()                      {}
 func (*MsgCanaryMapSet) Descriptor() ([]byte, []int) { return fileDescriptorBytes, []int{0} }
 func (m *MsgCanaryMapSet) String() string {
 	return fmt.Sprintf("MsgCanaryMapSet{sender:%s, key:%s, value:%d}", m.Sender, m.Key, m.Value)
@@ -147,13 +147,13 @@ type MsgCanaryMapSetResponse struct{}
 
 var _ proto.Message = (*MsgCanaryMapSetResponse)(nil)
 
-func (*MsgCanaryMapSetResponse) ProtoMessage()             {}
-func (*MsgCanaryMapSetResponse) Reset()                     {}
+func (*MsgCanaryMapSetResponse) ProtoMessage()               {}
+func (*MsgCanaryMapSetResponse) Reset()                      {}
 func (*MsgCanaryMapSetResponse) Descriptor() ([]byte, []int) { return fileDescriptorBytes, []int{1} }
 func (*MsgCanaryMapSetResponse) String() string              { return "MsgCanaryMapSetResponse{}" }
 
-func (*MsgCanaryMapSetResponse) Marshal() ([]byte, error)                { return nil, nil }
-func (*MsgCanaryMapSetResponse) MarshalTo(dAtA []byte) (int, error)      { return 0, nil }
+func (*MsgCanaryMapSetResponse) Marshal() ([]byte, error)                 { return nil, nil }
+func (*MsgCanaryMapSetResponse) MarshalTo(dAtA []byte) (int, error)       { return 0, nil }
 func (*MsgCanaryMapSetResponse) MarshalToSizedBuffer([]byte) (int, error) { return 0, nil }
 func (*MsgCanaryMapSetResponse) Unmarshal([]byte) error                   { return nil }
 func (*MsgCanaryMapSetResponse) Size() int                                { return 0 }
@@ -171,8 +171,8 @@ type MsgCanaryMapReadAndWrite struct {
 
 var _ proto.Message = (*MsgCanaryMapReadAndWrite)(nil)
 
-func (*MsgCanaryMapReadAndWrite) ProtoMessage()             {}
-func (*MsgCanaryMapReadAndWrite) Reset()                     {}
+func (*MsgCanaryMapReadAndWrite) ProtoMessage()               {}
+func (*MsgCanaryMapReadAndWrite) Reset()                      {}
 func (*MsgCanaryMapReadAndWrite) Descriptor() ([]byte, []int) { return fileDescriptorBytes, []int{2} }
 func (m *MsgCanaryMapReadAndWrite) String() string {
 	return fmt.Sprintf("MsgCanaryMapReadAndWrite{sender:%s, key:%s}", m.Sender, m.Key)
@@ -280,9 +280,11 @@ type MsgCanaryMapReadAndWriteResponse struct {
 
 var _ proto.Message = (*MsgCanaryMapReadAndWriteResponse)(nil)
 
-func (*MsgCanaryMapReadAndWriteResponse) ProtoMessage()             {}
-func (*MsgCanaryMapReadAndWriteResponse) Reset()                     {}
-func (*MsgCanaryMapReadAndWriteResponse) Descriptor() ([]byte, []int) { return fileDescriptorBytes, []int{3} }
+func (*MsgCanaryMapReadAndWriteResponse) ProtoMessage() {}
+func (*MsgCanaryMapReadAndWriteResponse) Reset()        {}
+func (*MsgCanaryMapReadAndWriteResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptorBytes, []int{3}
+}
 func (m *MsgCanaryMapReadAndWriteResponse) String() string {
 	return fmt.Sprintf("MsgCanaryMapReadAndWriteResponse{observed_value:%d}", m.ObservedValue)
 }
@@ -348,6 +350,363 @@ func (m *MsgCanaryMapReadAndWriteResponse) Size() int {
 }
 
 // ---------------------------------------------------------------------------
+// MsgCanaryBlockContextSet — mutates a block-context field
+// ---------------------------------------------------------------------------
+
+const msgCanaryBlockContextSetProtoName = "simcanary.v1.MsgCanaryBlockContextSet"
+
+type MsgCanaryBlockContextSet struct {
+	Sender string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	Field  string `protobuf:"bytes,2,opt,name=field,proto3" json:"field,omitempty"`
+	Value  string `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+}
+
+var _ proto.Message = (*MsgCanaryBlockContextSet)(nil)
+
+func (*MsgCanaryBlockContextSet) ProtoMessage()               {}
+func (*MsgCanaryBlockContextSet) Reset()                      {}
+func (*MsgCanaryBlockContextSet) Descriptor() ([]byte, []int) { return fileDescriptorBytes, []int{4} }
+func (m *MsgCanaryBlockContextSet) String() string {
+	return fmt.Sprintf("MsgCanaryBlockContextSet{sender:%s, field:%s, value:%s}", m.Sender, m.Field, m.Value)
+}
+
+func (m *MsgCanaryBlockContextSet) Marshal() ([]byte, error) {
+	size := m.Size()
+	buf := make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf[:n], nil
+}
+
+func (m *MsgCanaryBlockContextSet) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgCanaryBlockContextSet) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if len(m.Value) > 0 {
+		i -= len(m.Value)
+		copy(dAtA[i:], m.Value)
+		i = encodeVarint(dAtA, i, uint64(len(m.Value)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Field) > 0 {
+		i -= len(m.Field)
+		copy(dAtA[i:], m.Field)
+		i = encodeVarint(dAtA, i, uint64(len(m.Field)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Sender) > 0 {
+		i -= len(m.Sender)
+		copy(dAtA[i:], m.Sender)
+		i = encodeVarint(dAtA, i, uint64(len(m.Sender)))
+		i--
+		dAtA[i] = 0x0a
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgCanaryBlockContextSet) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		fieldNum, wireType, n := decodeTag(dAtA[iNdEx:])
+		if n < 0 {
+			return io.ErrUnexpectedEOF
+		}
+		iNdEx += n
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("unexpected wire type %d for field sender", wireType)
+			}
+			sLen, n := binary.Uvarint(dAtA[iNdEx:])
+			if n <= 0 {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += n
+			if iNdEx+int(sLen) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Sender = string(dAtA[iNdEx : iNdEx+int(sLen)])
+			iNdEx += int(sLen)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("unexpected wire type %d for field field", wireType)
+			}
+			sLen, n := binary.Uvarint(dAtA[iNdEx:])
+			if n <= 0 {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += n
+			if iNdEx+int(sLen) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Field = string(dAtA[iNdEx : iNdEx+int(sLen)])
+			iNdEx += int(sLen)
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("unexpected wire type %d for field value", wireType)
+			}
+			sLen, n := binary.Uvarint(dAtA[iNdEx:])
+			if n <= 0 {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += n
+			if iNdEx+int(sLen) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Value = string(dAtA[iNdEx : iNdEx+int(sLen)])
+			iNdEx += int(sLen)
+		default:
+			iNdEx, _ = skipField(dAtA, iNdEx, wireType)
+		}
+	}
+	return nil
+}
+
+func (m *MsgCanaryBlockContextSet) Size() int {
+	var n int
+	if len(m.Sender) > 0 {
+		n += 1 + sovLen(uint64(len(m.Sender))) + len(m.Sender)
+	}
+	if len(m.Field) > 0 {
+		n += 1 + sovLen(uint64(len(m.Field))) + len(m.Field)
+	}
+	if len(m.Value) > 0 {
+		n += 1 + sovLen(uint64(len(m.Value))) + len(m.Value)
+	}
+	return n
+}
+
+// ---------------------------------------------------------------------------
+// MsgCanaryBlockContextSetResponse
+// ---------------------------------------------------------------------------
+
+const msgCanaryBlockContextSetResponseProtoName = "simcanary.v1.MsgCanaryBlockContextSetResponse"
+
+type MsgCanaryBlockContextSetResponse struct{}
+
+var _ proto.Message = (*MsgCanaryBlockContextSetResponse)(nil)
+
+func (*MsgCanaryBlockContextSetResponse) ProtoMessage() {}
+func (*MsgCanaryBlockContextSetResponse) Reset()        {}
+func (*MsgCanaryBlockContextSetResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptorBytes, []int{5}
+}
+func (*MsgCanaryBlockContextSetResponse) String() string {
+	return "MsgCanaryBlockContextSetResponse{}"
+}
+
+func (*MsgCanaryBlockContextSetResponse) Marshal() ([]byte, error)                 { return nil, nil }
+func (*MsgCanaryBlockContextSetResponse) MarshalTo(dAtA []byte) (int, error)       { return 0, nil }
+func (*MsgCanaryBlockContextSetResponse) MarshalToSizedBuffer([]byte) (int, error) { return 0, nil }
+func (*MsgCanaryBlockContextSetResponse) Unmarshal([]byte) error                   { return nil }
+func (*MsgCanaryBlockContextSetResponse) Size() int                                { return 0 }
+
+// ---------------------------------------------------------------------------
+// MsgCanaryBlockContextRead — reads a block-context field
+// ---------------------------------------------------------------------------
+
+const msgCanaryBlockContextReadProtoName = "simcanary.v1.MsgCanaryBlockContextRead"
+
+type MsgCanaryBlockContextRead struct {
+	Sender string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	Field  string `protobuf:"bytes,2,opt,name=field,proto3" json:"field,omitempty"`
+}
+
+var _ proto.Message = (*MsgCanaryBlockContextRead)(nil)
+
+func (*MsgCanaryBlockContextRead) ProtoMessage()               {}
+func (*MsgCanaryBlockContextRead) Reset()                      {}
+func (*MsgCanaryBlockContextRead) Descriptor() ([]byte, []int) { return fileDescriptorBytes, []int{6} }
+func (m *MsgCanaryBlockContextRead) String() string {
+	return fmt.Sprintf("MsgCanaryBlockContextRead{sender:%s, field:%s}", m.Sender, m.Field)
+}
+
+func (m *MsgCanaryBlockContextRead) Marshal() ([]byte, error) {
+	size := m.Size()
+	buf := make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf[:n], nil
+}
+
+func (m *MsgCanaryBlockContextRead) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgCanaryBlockContextRead) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if len(m.Field) > 0 {
+		i -= len(m.Field)
+		copy(dAtA[i:], m.Field)
+		i = encodeVarint(dAtA, i, uint64(len(m.Field)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Sender) > 0 {
+		i -= len(m.Sender)
+		copy(dAtA[i:], m.Sender)
+		i = encodeVarint(dAtA, i, uint64(len(m.Sender)))
+		i--
+		dAtA[i] = 0x0a
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgCanaryBlockContextRead) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		fieldNum, wireType, n := decodeTag(dAtA[iNdEx:])
+		if n < 0 {
+			return io.ErrUnexpectedEOF
+		}
+		iNdEx += n
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("unexpected wire type %d for field sender", wireType)
+			}
+			sLen, n := binary.Uvarint(dAtA[iNdEx:])
+			if n <= 0 {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += n
+			if iNdEx+int(sLen) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Sender = string(dAtA[iNdEx : iNdEx+int(sLen)])
+			iNdEx += int(sLen)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("unexpected wire type %d for field field", wireType)
+			}
+			sLen, n := binary.Uvarint(dAtA[iNdEx:])
+			if n <= 0 {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += n
+			if iNdEx+int(sLen) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Field = string(dAtA[iNdEx : iNdEx+int(sLen)])
+			iNdEx += int(sLen)
+		default:
+			iNdEx, _ = skipField(dAtA, iNdEx, wireType)
+		}
+	}
+	return nil
+}
+
+func (m *MsgCanaryBlockContextRead) Size() int {
+	var n int
+	if len(m.Sender) > 0 {
+		n += 1 + sovLen(uint64(len(m.Sender))) + len(m.Sender)
+	}
+	if len(m.Field) > 0 {
+		n += 1 + sovLen(uint64(len(m.Field))) + len(m.Field)
+	}
+	return n
+}
+
+// ---------------------------------------------------------------------------
+// MsgCanaryBlockContextReadResponse
+// ---------------------------------------------------------------------------
+
+const msgCanaryBlockContextReadResponseProtoName = "simcanary.v1.MsgCanaryBlockContextReadResponse"
+
+type MsgCanaryBlockContextReadResponse struct {
+	Value string `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+}
+
+var _ proto.Message = (*MsgCanaryBlockContextReadResponse)(nil)
+
+func (*MsgCanaryBlockContextReadResponse) ProtoMessage() {}
+func (*MsgCanaryBlockContextReadResponse) Reset()        {}
+func (*MsgCanaryBlockContextReadResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptorBytes, []int{7}
+}
+func (m *MsgCanaryBlockContextReadResponse) String() string {
+	return fmt.Sprintf("MsgCanaryBlockContextReadResponse{value:%s}", m.Value)
+}
+
+func (m *MsgCanaryBlockContextReadResponse) Marshal() ([]byte, error) {
+	size := m.Size()
+	buf := make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf[:n], nil
+}
+
+func (m *MsgCanaryBlockContextReadResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgCanaryBlockContextReadResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if len(m.Value) > 0 {
+		i -= len(m.Value)
+		copy(dAtA[i:], m.Value)
+		i = encodeVarint(dAtA, i, uint64(len(m.Value)))
+		i--
+		dAtA[i] = 0x0a
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgCanaryBlockContextReadResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		fieldNum, wireType, n := decodeTag(dAtA[iNdEx:])
+		if n < 0 {
+			return io.ErrUnexpectedEOF
+		}
+		iNdEx += n
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("unexpected wire type %d for field value", wireType)
+			}
+			sLen, n := binary.Uvarint(dAtA[iNdEx:])
+			if n <= 0 {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += n
+			if iNdEx+int(sLen) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Value = string(dAtA[iNdEx : iNdEx+int(sLen)])
+			iNdEx += int(sLen)
+		default:
+			iNdEx, _ = skipField(dAtA, iNdEx, wireType)
+		}
+	}
+	return nil
+}
+
+func (m *MsgCanaryBlockContextReadResponse) Size() int {
+	var n int
+	if len(m.Value) > 0 {
+		n += 1 + sovLen(uint64(len(m.Value))) + len(m.Value)
+	}
+	return n
+}
+
+// ---------------------------------------------------------------------------
 // Proto type registration
 // ---------------------------------------------------------------------------
 
@@ -356,6 +715,10 @@ func init() {
 	proto.RegisterType((*MsgCanaryMapSetResponse)(nil), msgCanaryMapSetResponseProtoName)
 	proto.RegisterType((*MsgCanaryMapReadAndWrite)(nil), msgCanaryMapReadAndWriteProtoName)
 	proto.RegisterType((*MsgCanaryMapReadAndWriteResponse)(nil), msgCanaryMapReadAndWriteResponseProtoName)
+	proto.RegisterType((*MsgCanaryBlockContextSet)(nil), msgCanaryBlockContextSetProtoName)
+	proto.RegisterType((*MsgCanaryBlockContextSetResponse)(nil), msgCanaryBlockContextSetResponseProtoName)
+	proto.RegisterType((*MsgCanaryBlockContextRead)(nil), msgCanaryBlockContextReadProtoName)
+	proto.RegisterType((*MsgCanaryBlockContextReadResponse)(nil), msgCanaryBlockContextReadResponseProtoName)
 }
 
 // ---------------------------------------------------------------------------

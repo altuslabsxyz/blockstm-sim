@@ -11,6 +11,13 @@ import (
 	"cosmossdk.io/core/store"
 )
 
+// BlockContextWriter is implemented by the compare block-context tracker
+// without requiring this package to import compare.
+type BlockContextWriter interface {
+	ReadField(name string) string
+	WriteField(name, value string)
+}
+
 type Keeper struct {
 	storeService store.KVStoreService
 
@@ -19,6 +26,8 @@ type Keeper struct {
 	// to this map produce a stale-read violation that diverges AppHash.
 	sharedMap map[string]int64
 	mu        sync.Mutex
+
+	blockCtxWriter BlockContextWriter
 }
 
 func NewKeeper(ss store.KVStoreService) *Keeper {
@@ -39,6 +48,24 @@ func (k *Keeper) GetMapValue(key string) int64 {
 	v := k.sharedMap[key]
 	k.mu.Unlock()
 	return v
+}
+
+func (k *Keeper) SetBlockContextWriter(w BlockContextWriter) {
+	k.blockCtxWriter = w
+}
+
+func (k *Keeper) WriteBlockCtxField(name, value string) {
+	if k.blockCtxWriter == nil {
+		return
+	}
+	k.blockCtxWriter.WriteField(name, value)
+}
+
+func (k *Keeper) ReadBlockCtxField(name string) string {
+	if k.blockCtxWriter == nil {
+		return ""
+	}
+	return k.blockCtxWriter.ReadField(name)
 }
 
 func (k *Keeper) WriteToStore(ctx context.Context, key string, value int64) error {
