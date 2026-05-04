@@ -29,6 +29,7 @@ jobs:
       PRIVATE_COMET_REPOSITORY: ${{ vars.PRIVATE_COMET_REPOSITORY }}
       PRIVATE_COMET_REF: ${{ vars.PRIVATE_COMET_REF }}
       PRIVATE_COMET_TOKEN: ${{ secrets.PRIVATE_COMET_TOKEN }}
+      GOPRIVATE: ${{ vars.GOPRIVATE }}
 
     steps:
       - name: Checkout blockstm-sim
