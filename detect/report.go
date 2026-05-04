@@ -14,12 +14,12 @@ func NewReporter(out io.Writer) *Reporter {
 }
 
 func (r *Reporter) Header(sdkPath string) {
-	fmt.Fprintf(r.out, "Detect  sdk-path=%s\n\n", sdkPath)
+	r.write("Detect  sdk-path=%s\n\n", sdkPath)
 }
 
 func (r *Reporter) Finding(f Finding) {
-	fmt.Fprintf(r.out, "[%s] %s:%d  %s\n", f.Category, f.File, f.Line, f.FuncName)
-	fmt.Fprintf(r.out, "       %s\n", f.Call)
+	r.write("[%s] %s:%d  %s\n", f.Category, f.File, f.Line, f.FuncName)
+	r.write("       %s\n", f.Call)
 }
 
 func (r *Reporter) Footer(result *ScanResult, sdkPath string) {
@@ -35,6 +35,10 @@ func (r *Reporter) Footer(result *ScanResult, sdkPath string) {
 		}
 	}
 	total := len(result.Findings)
-	fmt.Fprintf(r.out, "\nSummary\n  %d findings / %d time / %d rand / %d io\n  Scanned %d files in %s\n",
+	r.write("\nSummary\n  %d findings / %d time / %d rand / %d io\n  Scanned %d files in %s\n",
 		total, timeCnt, randCnt, ioCnt, result.Files, sdkPath)
+}
+
+func (r *Reporter) write(format string, args ...any) {
+	_, _ = fmt.Fprintf(r.out, format, args...)
 }
