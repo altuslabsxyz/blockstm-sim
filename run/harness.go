@@ -21,9 +21,7 @@ type Config struct {
 	FailOnDivergence bool
 }
 
-func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, errOut io.Writer) int {
-	rep := report.NewCLI(out, errOut)
-
+func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep report.Reporter, errOut io.Writer) int {
 	totalBlocks := 0
 	for _, s := range stores {
 		totalBlocks += s.BlockCount()
