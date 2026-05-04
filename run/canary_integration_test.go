@@ -90,3 +90,33 @@ func TestCanaryC1_HarnessE2E(t *testing.T) {
 	require.True(t, diverged,
 		"harness must report DIVERGENCE for canary-01-keeper-map within %d attempts", maxAttempts)
 }
+
+// TestCanaryF4_OutOfKVStoreMutationDetected verifies that the F4 runtime layer
+// generates DimOutOfKVStore findings deterministically on each run.
+// Unlike C1 (race-dependent), F4 detects snapshot diffs on every oracle execution.
+func TestCanaryF4_OutOfKVStoreMutationDetected(t *testing.T) {
+	fixture, err := compare.LoadFixture("../corpus/fixtures", "canary-01-keeper-map.yaml")
+	require.NoError(t, err)
+
+	exec := run.NewFixtureExecutor()
+	require.NoError(t, exec.Init(fixture.Genesis))
+	defer exec.Close()
+
+	result, err := exec.RunBlock(fixture.Blocks[0], 1)
+	require.NoError(t, err)
+
+	var f4Findings []compare.Finding
+	for _, f := range result.Findings {
+		if f.Dimension == compare.DimOutOfKVStore {
+			f4Findings = append(f4Findings, f)
+		}
+	}
+	require.NotEmpty(t, f4Findings,
+		"F4 must detect out-of-KVStore mutation in canary-01-keeper-map on every run")
+	require.Equal(t, 0, f4Findings[0].TxIndex,
+		"MapSet (tx 0) mutates sharedMap and must be detected by F4")
+	require.Contains(t, f4Findings[0].Oracle, "simcanary.sharedMap")
+	require.Contains(t, f4Findings[0].Probe, "simcanary.sharedMap")
+	require.NotEqual(t, f4Findings[0].Oracle, f4Findings[0].Probe,
+		"before and after snapshots must differ")
+}
