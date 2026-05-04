@@ -1,0 +1,101 @@
+name: Simulation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "run/**"
+      - "compare/**"
+      - "simharness/**"
+      - "instrument/**"
+      - "corpus/**"
+      - "x/**"
+      - "go.mod"
+      - "go.sum"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout blockstm-sim
+        uses: actions/checkout@v4
+        with:
+          path: blockstm-sim
+
+      - name: Checkout stable-sdk
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.STABLE_SDK_REPO }}
+          ref: ${{ vars.STABLE_SDK_REF }}
+          token: ${{ secrets.STABLE_SDK_TOKEN }}
+          path: stable-sdk
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+          cache-dependency-path: blockstm-sim/go.sum
+
+      - name: Build simharness+canary binary
+        working-directory: blockstm-sim
+        run: make build-canary
+
+      - name: Run simulation corpus
+        id: sim
+        working-directory: blockstm-sim
+        run: |
+          set +e
+          ./build/blockstm-sim --record-off run \
+            --corpus corpus/fixtures \
+            --fail-on-divergence \
+            --format markdown \
+            > simulation-report.md 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload simulation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-report
+          path: blockstm-sim/simulation-report.md
+          if-no-files-found: warn
+
+      - name: Post PR comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          SIM_EXIT: ${{ steps.sim.outputs.exit_code }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'blockstm-sim/simulation-report.md';
+            let body;
+            if (fs.existsSync(reportPath)) {
+              body = fs.readFileSync(reportPath, 'utf8');
+            } else {
+              body = '**Simulation report not found.** The build may have failed before the simulation ran.';
+            }
+            const exitCode = process.env.SIM_EXIT;
+            const header = exitCode === '0'
+              ? '## Simulation Passed\n\n'
+              : '## Simulation FAILED (exit ' + exitCode + ')\n\n';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: header + body,
+            });
+
+      - name: Fail if simulation found divergence
+        if: always() && steps.sim.outputs.exit_code != '0'
+        env:
+          SIM_EXIT: ${{ steps.sim.outputs.exit_code }}
+        run: |
+          echo "Simulation exited with code ${SIM_EXIT}"
+          exit 1
