@@ -16,3 +16,15 @@ build:
           - "Makefile"
           - "go.mod"
           - "go.sum"
+
+execution-path:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "run/**"
+          - "compare/**"
+          - "simharness/**"
+          - "instrument/**"
+          - "corpus/**"
+          - "x/**"
+          - "go.mod"
+          - "go.sum"

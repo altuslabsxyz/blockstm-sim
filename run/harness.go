@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"io"
 
+	dbm "github.com/cosmos/cosmos-db"
+
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/coverage"
 	"github.com/altuslabsxyz/blockstm-sim/report"
 )
 
@@ -15,15 +18,20 @@ type Executor interface {
 	Close()
 }
 
+// StateInitializer is an optional interface for executors that can initialise
+// from an existing multistore rather than from a genesis spec.
+// Requires stable-sdk PR-3b (CacheMultiStoreWithVersion) to be merged.
+type StateInitializer interface {
+	InitFromState(preStateDB dbm.DB) error
+}
+
 type Config struct {
 	CorpusDir        string
 	Probes           int
 	FailOnDivergence bool
 }
 
-func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, errOut io.Writer) int {
-	rep := report.NewCLI(out, errOut)
-
+func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep report.Reporter, errOut io.Writer) int {
 	totalBlocks := 0
 	for _, s := range stores {
 		totalBlocks += s.BlockCount()
@@ -32,6 +40,8 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, er
 	rep.Header(cfg.CorpusDir, totalBlocks, cfg.Probes)
 
 	ctx := context.Background()
+
+	tracker := coverage.NewTracker()
 
 	var (
 		okCount         int
@@ -45,26 +55,49 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, er
 		name := store.Name()
 		isCanary := store.IsCanary()
 
-		if err := exec.Init(store.Genesis()); err != nil {
-			fmt.Fprintf(errOut, "init fixture %s: %v\n", name, err)
-			blockNum += store.BlockCount()
-			continue
+		if preStateDB := store.PreStateDB(); preStateDB != nil {
+			si, ok := exec.(StateInitializer)
+			if !ok {
+				fmt.Fprintf(errOut, "executor does not support state-based init for %s\n", name)
+				store.Close()
+				blockNum += store.BlockCount()
+				continue
+			}
+			if err := si.InitFromState(preStateDB); err != nil {
+				fmt.Fprintf(errOut, "init from state %s: %v\n", name, err)
+				store.Close()
+				blockNum += store.BlockCount()
+				continue
+			}
+		} else {
+			if err := exec.Init(store.Genesis()); err != nil {
+				fmt.Fprintf(errOut, "init fixture %s: %v\n", name, err)
+				store.Close()
+				blockNum += store.BlockCount()
+				continue
+			}
 		}
 
-		var height int64
+		var localHeight int64
 		for block, err := range store.Iter(ctx) {
 			if err != nil {
 				fmt.Fprintf(errOut, "iter fixture %s: %v\n", name, err)
 				break
 			}
-			height++
+			localHeight++
 			blockNum++
+			effectiveHeight := localHeight
+			if block.Height > 0 {
+				effectiveHeight = block.Height
+			}
 
-			result, err := exec.RunBlock(block, height)
+			result, err := exec.RunBlock(block, effectiveHeight)
 			if err != nil {
-				fmt.Fprintf(errOut, "run block %d of %s: %v\n", height, name, err)
+				fmt.Fprintf(errOut, "run block %d of %s: %v\n", effectiveHeight, name, err)
 				continue
 			}
+
+			tracker.RecordBlock(result.MsgKeys)
 
 			outcome := report.BlockOutcome{
 				Index:       blockNum,
@@ -99,6 +132,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, er
 		CanaryExpected:  canaryExpected,
 		CanaryMissed:    canaryMissed,
 		ReporterErrors:  rep.Errors(),
+		Coverage:        tracker.Report(),
 	}
 	rep.Footer(summary, cfg.FailOnDivergence)
 

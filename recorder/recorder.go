@@ -8,9 +8,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/coverage"
 )
 
 const SchemaVersion = 1
@@ -30,6 +32,7 @@ type BlockRecord struct {
 	FixtureName string            `json:"fixture_name"`
 	Verdict     string            `json:"verdict"`
 	Divergences []DivergenceEntry `json:"divergences,omitempty"`
+	MsgTypes    []coverage.Entry  `json:"msg_types,omitempty"`
 }
 
 // DivergenceEntry captures a single finding.
@@ -129,6 +132,24 @@ func BlockRecordFromResult(r *compare.Result, fixtureName string) BlockRecord {
 			Oracle:     f.Oracle,
 			Probe:      f.Probe,
 		})
+	}
+	if len(r.MsgKeys) > 0 {
+		reg := coverage.Registered()
+		seen := make(map[string]struct{}, len(r.MsgKeys))
+		var entries []coverage.Entry
+		for _, k := range r.MsgKeys {
+			if _, dup := seen[k]; dup {
+				continue
+			}
+			seen[k] = struct{}{}
+			if e, ok := reg[k]; ok {
+				entries = append(entries, e)
+			} else {
+				entries = append(entries, coverage.Entry{Key: k})
+			}
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Key < entries[j].Key })
+		br.MsgTypes = entries
 	}
 	return br
 }

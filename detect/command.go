@@ -8,6 +8,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type formatter interface {
+	Header(sdkPath string)
+	Finding(f Finding)
+	Footer(result *ScanResult, sdkPath string)
+}
+
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "detect",
@@ -16,6 +22,7 @@ func NewCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			sdkPath, _ := cmd.Flags().GetString("sdk-path")
 			category, _ := cmd.Flags().GetString("category")
+			format, _ := cmd.Flags().GetString("format")
 
 			scanner := NewScanner(DefaultRules())
 			result, err := scanner.ScanDir(sdkPath)
@@ -42,7 +49,16 @@ func NewCommand() *cobra.Command {
 				return result.Findings[i].Line < result.Findings[j].Line
 			})
 
-			rep := NewReporter(os.Stdout)
+			var rep formatter
+			switch format {
+			case "json":
+				rep = NewJSONReporter(os.Stdout)
+			case "markdown":
+				rep = NewMarkdownReporter(os.Stdout)
+			default:
+				rep = NewReporter(os.Stdout)
+			}
+
 			rep.Header(sdkPath)
 			for _, f := range result.Findings {
 				rep.Finding(f)
@@ -58,6 +74,7 @@ func NewCommand() *cobra.Command {
 
 	cmd.Flags().String("sdk-path", "../stable-sdk", "Path to SDK source tree")
 	cmd.Flags().String("category", "", "Filter to a single category: time, rand, or io")
+	cmd.Flags().String("format", "text", "Output format: text, json, or markdown")
 
 	return cmd
 }
