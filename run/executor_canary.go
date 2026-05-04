@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/testutil/configurator"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/coverage"
 	_ "github.com/altuslabsxyz/blockstm-sim/x/simcanary"
 	simcanarytypes "github.com/altuslabsxyz/blockstm-sim/x/simcanary/types"
 )
@@ -22,6 +23,19 @@ func init() {
 
 	extraTxBuilders["canary-map-set"] = buildCanaryMapSet
 	extraTxBuilders["canary-map-read-write"] = buildCanaryMapReadAndWrite
+
+	coverage.Register("canary-map-set", coverage.Entry{
+		Key:       "canary-map-set",
+		Module:    "simcanary",
+		MsgType:   "MsgCanaryMapSet",
+		HandlerFn: "MapSet",
+	})
+	coverage.Register("canary-map-read-write", coverage.Entry{
+		Key:       "canary-map-read-write",
+		Module:    "simcanary",
+		MsgType:   "MsgCanaryMapReadAndWrite",
+		HandlerFn: "MapReadAndWrite",
+	})
 }
 
 func simcanaryModule() configurator.ModuleOption {

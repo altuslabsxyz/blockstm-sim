@@ -8,6 +8,7 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/coverage"
 	"github.com/altuslabsxyz/blockstm-sim/report"
 )
 
@@ -41,6 +42,8 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, er
 	rep.Header(cfg.CorpusDir, totalBlocks, cfg.Probes)
 
 	ctx := context.Background()
+
+	tracker := coverage.NewTracker()
 
 	var (
 		okCount         int
@@ -96,6 +99,8 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, er
 				continue
 			}
 
+			tracker.RecordBlock(result.MsgKeys)
+
 			outcome := report.BlockOutcome{
 				Index:       blockNum,
 				Total:       totalBlocks,
@@ -129,6 +134,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, er
 		CanaryExpected:  canaryExpected,
 		CanaryMissed:    canaryMissed,
 		ReporterErrors:  rep.Errors(),
+		Coverage:        tracker.Report(),
 	}
 	rep.Footer(summary, cfg.FailOnDivergence)
 

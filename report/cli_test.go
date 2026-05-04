@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/coverage"
 	"github.com/altuslabsxyz/blockstm-sim/report"
 )
 
@@ -133,6 +134,53 @@ func TestSummary_ExitCode(t *testing.T) {
 			require.Equal(t, tt.want, tt.summary.ExitCode(tt.failOnDivergence))
 		})
 	}
+}
+
+func TestFooter_Coverage_NoEntries(t *testing.T) {
+	r, out, _ := newReporter()
+	r.Footer(report.Summary{TotalBlocks: 5, OKCount: 5}, false)
+	got := out.String()
+	require.NotContains(t, got, "Coverage")
+}
+
+func TestFooter_Coverage_AllCovered(t *testing.T) {
+	r, out, _ := newReporter()
+	r.Footer(report.Summary{
+		TotalBlocks: 2,
+		OKCount:     2,
+		Coverage: coverage.Report{
+			Covered: []coverage.EntryStat{
+				{Entry: coverage.Entry{Key: "bank-send", Module: "bank", MsgType: "MsgSend", HandlerFn: "Send"}, Count: 5},
+			},
+		},
+	}, false)
+	got := out.String()
+	require.Contains(t, got, "Coverage  registered=1  covered=1  uncovered=0")
+	require.Contains(t, got, "bank")
+	require.Contains(t, got, "MsgSend")
+	require.Contains(t, got, "5 tx")
+	require.NotContains(t, got, "!")
+}
+
+func TestFooter_Coverage_SomeUncovered(t *testing.T) {
+	r, out, _ := newReporter()
+	r.Footer(report.Summary{
+		TotalBlocks: 1,
+		OKCount:     1,
+		Coverage: coverage.Report{
+			Covered: []coverage.EntryStat{
+				{Entry: coverage.Entry{Key: "bank-send", Module: "bank", MsgType: "MsgSend", HandlerFn: "Send"}, Count: 3},
+			},
+			Uncovered: []coverage.Entry{
+				{Key: "canary-map-set", Module: "simcanary", MsgType: "MsgCanaryMapSet", HandlerFn: "MapSet"},
+			},
+		},
+	}, false)
+	got := out.String()
+	require.Contains(t, got, "Coverage  registered=2  covered=1  uncovered=1")
+	require.Contains(t, got, "! simcanary")
+	require.Contains(t, got, "MapSet")
+	require.Contains(t, got, "0 tx")
 }
 
 type errWriter struct{ n int }
