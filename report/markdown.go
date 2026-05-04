@@ -33,17 +33,16 @@ func (r *MarkdownReporter) Block(o BlockOutcome) {
 }
 
 func (r *MarkdownReporter) Footer(s Summary, failOnDivergence bool) {
-	w := r.out
-	fmt.Fprintf(w, "# BlockSTM Sim — Run Report\n\n")
-	fmt.Fprintf(w, "**Corpus:** %s  **Probes:** %d\n\n", r.corpus, r.probes)
+	r.write("# BlockSTM Sim — Run Report\n\n")
+	r.write("**Corpus:** %s  **Probes:** %d\n\n", r.corpus, r.probes)
 
-	fmt.Fprintf(w, "## Summary\n\n")
-	fmt.Fprintf(w, "| Metric | Count |\n|--------|-------|\n")
-	fmt.Fprintf(w, "| Total Blocks | %d |\n", s.TotalBlocks)
-	fmt.Fprintf(w, "| OK | %d |\n", s.OKCount)
-	fmt.Fprintf(w, "| Divergences | %d |\n", s.DivergenceCount)
-	fmt.Fprintf(w, "| Canary Expected | %d |\n", s.CanaryExpected)
-	fmt.Fprintf(w, "| Canary Missed | %d |\n\n", s.CanaryMissed)
+	r.write("## Summary\n\n")
+	r.write("| Metric | Count |\n|--------|-------|\n")
+	r.write("| Total Blocks | %d |\n", s.TotalBlocks)
+	r.write("| OK | %d |\n", s.OKCount)
+	r.write("| Divergences | %d |\n", s.DivergenceCount)
+	r.write("| Canary Expected | %d |\n", s.CanaryExpected)
+	r.write("| Canary Missed | %d |\n\n", s.CanaryMissed)
 
 	var divBlocks, missedCanaries []BlockOutcome
 	for _, b := range r.blocks {
@@ -56,38 +55,42 @@ func (r *MarkdownReporter) Footer(s Summary, failOnDivergence bool) {
 	}
 
 	if len(divBlocks) > 0 {
-		fmt.Fprintf(w, "## Divergences\n\n")
+		r.write("## Divergences\n\n")
 		for _, b := range divBlocks {
-			fmt.Fprintf(w, "### %s\n\n", b.FixtureName)
-			fmt.Fprintf(w, "| ID | Height | Tx | Probe | Dimension |\n|----|--------|----|-------|-----------|\n")
+			r.write("### %s\n\n", b.FixtureName)
+			r.write("| ID | Height | Tx | Probe | Dimension |\n|----|--------|----|-------|-----------|\n")
 			for _, f := range b.Findings {
-				fmt.Fprintf(w, "| `%s` | %d | %d | %d | %s |\n",
+				r.write("| `%s` | %d | %d | %d | %s |\n",
 					f.ID, f.Height, f.TxIndex, f.ProbeIndex, f.Dimension)
 			}
-			fmt.Fprintln(w)
+			r.write("\n")
 		}
 	}
 
 	if len(missedCanaries) > 0 {
-		fmt.Fprintf(w, "## Missed Canaries\n\n")
+		r.write("## Missed Canaries\n\n")
 		for _, b := range missedCanaries {
-			fmt.Fprintf(w, "- %s\n", b.FixtureName)
+			r.write("- %s\n", b.FixtureName)
 		}
-		fmt.Fprintln(w)
+		r.write("\n")
 	}
 
 	repro := reproRunCommand(r.corpus, r.probes, failOnDivergence)
-	fmt.Fprintf(w, "## Reproduce\n\n```sh\n%s\n```\n", repro)
+	r.write("## Reproduce\n\n```sh\n%s\n```\n", repro)
+}
+
+func (r *MarkdownReporter) write(format string, args ...any) {
+	_, _ = fmt.Fprintf(r.out, format, args...)
 }
 
 func reproRunCommand(corpus string, probes int, failOnDiv bool) string {
 	var sb strings.Builder
 	sb.WriteString("blockstm-sim run")
 	if corpus != "fixtures" {
-		fmt.Fprintf(&sb, " --corpus %s", corpus)
+		_, _ = fmt.Fprintf(&sb, " --corpus %s", corpus)
 	}
 	if probes != 1 {
-		fmt.Fprintf(&sb, " --probes %d", probes)
+		_, _ = fmt.Fprintf(&sb, " --probes %d", probes)
 	}
 	if failOnDiv {
 		sb.WriteString(" --fail-on-divergence")

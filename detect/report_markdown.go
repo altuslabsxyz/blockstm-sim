@@ -27,10 +27,6 @@ func (r *MarkdownReporter) Finding(f Finding) {
 }
 
 func (r *MarkdownReporter) Footer(result *ScanResult, _ string) {
-	w := r.out
-	fmt.Fprintf(w, "# BlockSTM Sim — Detect Report\n\n")
-	fmt.Fprintf(w, "**SDK Path:** %s\n\n", r.sdkPath)
-
 	var timeCnt, randCnt, ioCnt int
 	for _, f := range r.findings {
 		switch f.Category {
@@ -43,13 +39,16 @@ func (r *MarkdownReporter) Footer(result *ScanResult, _ string) {
 		}
 	}
 
-	fmt.Fprintf(w, "## Summary\n\n")
-	fmt.Fprintf(w, "| Category | Count |\n|----------|-------|\n")
-	fmt.Fprintf(w, "| time | %d |\n", timeCnt)
-	fmt.Fprintf(w, "| rand | %d |\n", randCnt)
-	fmt.Fprintf(w, "| io | %d |\n", ioCnt)
-	fmt.Fprintf(w, "| **Total** | **%d** |\n\n", len(r.findings))
-	fmt.Fprintf(w, "Scanned %d files.\n\n", result.Files)
+	r.write("# BlockSTM Sim — Detect Report\n\n")
+	r.write("**SDK Path:** %s\n\n", r.sdkPath)
+
+	r.write("## Summary\n\n")
+	r.write("| Category | Count |\n|----------|-------|\n")
+	r.write("| time | %d |\n", timeCnt)
+	r.write("| rand | %d |\n", randCnt)
+	r.write("| io | %d |\n", ioCnt)
+	r.write("| **Total** | **%d** |\n\n", len(r.findings))
+	r.write("Scanned %d files.\n\n", result.Files)
 
 	byModule := make(map[string][]Finding)
 	var modules []string
@@ -62,17 +61,21 @@ func (r *MarkdownReporter) Footer(result *ScanResult, _ string) {
 	sort.Strings(modules)
 
 	if len(modules) > 0 {
-		fmt.Fprintf(w, "## Findings by Module\n\n")
+		r.write("## Findings by Module\n\n")
 		for _, mod := range modules {
-			fmt.Fprintf(w, "### %s\n\n", mod)
-			fmt.Fprintf(w, "| File | Line | Function | Call | Category |\n|------|------|----------|------|----------|\n")
+			r.write("### %s\n\n", mod)
+			r.write("| File | Line | Function | Call | Category |\n|------|------|----------|------|----------|\n")
 			for _, f := range byModule[mod] {
-				fmt.Fprintf(w, "| `%s` | %d | `%s` | `%s` | %s |\n",
+				r.write("| `%s` | %d | `%s` | `%s` | %s |\n",
 					f.File, f.Line, f.FuncName, f.Call, f.Category)
 			}
-			fmt.Fprintln(w)
+			r.write("\n")
 		}
 	}
 
-	fmt.Fprintf(w, "## Reproduce\n\n```sh\nblockstm-sim detect --sdk-path %s\n```\n", r.sdkPath)
+	r.write("## Reproduce\n\n```sh\nblockstm-sim detect --sdk-path %s\n```\n", r.sdkPath)
+}
+
+func (r *MarkdownReporter) write(format string, args ...any) {
+	_, _ = fmt.Fprintf(r.out, format, args...)
 }
