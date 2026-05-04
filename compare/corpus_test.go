@@ -151,3 +151,13 @@ func TestFixtureCorpus_Methods(t *testing.T) {
 	require.Contains(t, genesis.Accounts, "alice")
 	require.Equal(t, "5000000stake", genesis.Accounts["alice"].Balance)
 }
+
+func TestBlockSpec_RawTxs(t *testing.T) {
+	b := compare.BlockSpec{
+		Height: 12345678,
+		RawTxs: [][]byte{[]byte("tx1"), []byte("tx2")},
+	}
+	require.Equal(t, int64(12345678), b.Height)
+	require.Len(t, b.RawTxs, 2)
+	require.Equal(t, []byte("tx1"), b.RawTxs[0])
+}

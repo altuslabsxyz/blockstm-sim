@@ -51,18 +51,22 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, er
 			continue
 		}
 
-		var height int64
+		var localHeight int64
 		for block, err := range store.Iter(ctx) {
 			if err != nil {
 				fmt.Fprintf(errOut, "iter fixture %s: %v\n", name, err)
 				break
 			}
-			height++
+			localHeight++
 			blockNum++
+			effectiveHeight := localHeight
+			if block.Height > 0 {
+				effectiveHeight = block.Height
+			}
 
-			result, err := exec.RunBlock(block, height)
+			result, err := exec.RunBlock(block, effectiveHeight)
 			if err != nil {
-				fmt.Fprintf(errOut, "run block %d of %s: %v\n", height, name, err)
+				fmt.Fprintf(errOut, "run block %d of %s: %v\n", effectiveHeight, name, err)
 				continue
 			}
 
