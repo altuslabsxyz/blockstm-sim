@@ -38,6 +38,17 @@ jobs:
           token: ${{ secrets.STABLE_SDK_TOKEN }}
           path: stable-sdk
 
+      - name: Verify stable-sdk layout
+        run: |
+          if [ ! -f "stable-sdk/go.mod" ]; then
+            echo "::error::stable-sdk/go.mod not found — STABLE_SDK_BRANCH ('${STABLE_SDK_BRANCH}') likely resolved to the wrong branch or a branch that does not contain the cosmos-sdk fork. Set the STABLE_SDK_BRANCH repository variable to the correct branch (e.g. feat/pla-55-stable-sdk-pr-4-scheduler-perturbhook)."
+            exit 1
+          fi
+          if [ ! -f "stable-sdk/store/go.mod" ]; then
+            echo "::error::stable-sdk/store/go.mod not found — the checked-out branch does not contain the modular cosmos-sdk store submodule. STABLE_SDK_BRANCH='${STABLE_SDK_BRANCH}'."
+            exit 1
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
