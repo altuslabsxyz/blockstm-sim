@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.STABLE_SDK_REPO }}
-          ref: ${{ vars.STABLE_SDK_REF }}
+          ref: ${{ vars.STABLE_SDK_REF || 'feat/pla-55-stable-sdk-pr-4-scheduler-perturbhook' }}
           token: ${{ secrets.STABLE_SDK_TOKEN }}
           path: stable-sdk
 
@@ -44,7 +44,13 @@ jobs:
 
       - name: Build simharness+canary binary
         working-directory: blockstm-sim
-        run: make build-canary
+        env:
+          GONOSUMDB: "github.com/stablelabs/*"
+          GOPRIVATE: "github.com/stablelabs/*"
+          STABLE_SDK_TOKEN: ${{ secrets.STABLE_SDK_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${STABLE_SDK_TOKEN}@github.com/stablelabs/".insteadOf "https://github.com/stablelabs/"
+          make build-canary
 
       - name: Run simulation corpus
         id: sim
