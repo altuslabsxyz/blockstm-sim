@@ -3,8 +3,8 @@ package types
 import (
 	"context"
 
-	"github.com/cosmos/gogoproto/proto"
 	grpc1 "github.com/cosmos/gogoproto/grpc"
+	"github.com/cosmos/gogoproto/proto"
 	"google.golang.org/grpc"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -16,6 +16,8 @@ import (
 type MsgServer interface {
 	MapSet(context.Context, *MsgCanaryMapSet) (*MsgCanaryMapSetResponse, error)
 	MapReadAndWrite(context.Context, *MsgCanaryMapReadAndWrite) (*MsgCanaryMapReadAndWriteResponse, error)
+	BlockContextSet(context.Context, *MsgCanaryBlockContextSet) (*MsgCanaryBlockContextSetResponse, error)
+	BlockContextRead(context.Context, *MsgCanaryBlockContextRead) (*MsgCanaryBlockContextReadResponse, error)
 }
 
 func RegisterMsgServer(s grpc1.Server, srv MsgServer) {
@@ -58,6 +60,42 @@ func _Msg_MapReadAndWrite_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_BlockContextSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgCanaryBlockContextSet)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).BlockContextSet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/simcanary.v1.Msg/BlockContextSet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).BlockContextSet(ctx, req.(*MsgCanaryBlockContextSet))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_BlockContextRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgCanaryBlockContextRead)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).BlockContextRead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/simcanary.v1.Msg/BlockContextRead",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).BlockContextRead(ctx, req.(*MsgCanaryBlockContextRead))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _ MsgServer = (*UnimplementedMsgServer)(nil)
 
 type UnimplementedMsgServer struct{}
@@ -67,6 +105,14 @@ func (*UnimplementedMsgServer) MapSet(context.Context, *MsgCanaryMapSet) (*MsgCa
 }
 
 func (*UnimplementedMsgServer) MapReadAndWrite(context.Context, *MsgCanaryMapReadAndWrite) (*MsgCanaryMapReadAndWriteResponse, error) {
+	return nil, nil
+}
+
+func (*UnimplementedMsgServer) BlockContextSet(context.Context, *MsgCanaryBlockContextSet) (*MsgCanaryBlockContextSetResponse, error) {
+	return nil, nil
+}
+
+func (*UnimplementedMsgServer) BlockContextRead(context.Context, *MsgCanaryBlockContextRead) (*MsgCanaryBlockContextReadResponse, error) {
 	return nil, nil
 }
 
@@ -82,6 +128,14 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 			MethodName: "MapReadAndWrite",
 			Handler:    _Msg_MapReadAndWrite_Handler,
 		},
+		{
+			MethodName: "BlockContextSet",
+			Handler:    _Msg_BlockContextSet_Handler,
+		},
+		{
+			MethodName: "BlockContextRead",
+			Handler:    _Msg_BlockContextRead_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: txProtoFile,
@@ -91,6 +145,8 @@ func RegisterInterfaces(registry codectypes.InterfaceRegistry) {
 	registry.RegisterImplementations((*sdk.Msg)(nil),
 		&MsgCanaryMapSet{},
 		&MsgCanaryMapReadAndWrite{},
+		&MsgCanaryBlockContextSet{},
+		&MsgCanaryBlockContextRead{},
 	)
 	msgservice.RegisterMsgServiceDesc(registry, &_Msg_serviceDesc)
 }
@@ -99,6 +155,10 @@ func RegisterInterfaces(registry codectypes.InterfaceRegistry) {
 var (
 	_ sdk.Msg       = (*MsgCanaryMapSet)(nil)
 	_ sdk.Msg       = (*MsgCanaryMapReadAndWrite)(nil)
+	_ sdk.Msg       = (*MsgCanaryBlockContextSet)(nil)
+	_ sdk.Msg       = (*MsgCanaryBlockContextRead)(nil)
 	_ proto.Message = (*MsgCanaryMapSetResponse)(nil)
 	_ proto.Message = (*MsgCanaryMapReadAndWriteResponse)(nil)
+	_ proto.Message = (*MsgCanaryBlockContextSetResponse)(nil)
+	_ proto.Message = (*MsgCanaryBlockContextReadResponse)(nil)
 )

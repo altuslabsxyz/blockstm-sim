@@ -16,7 +16,10 @@ func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run fixture corpus and report comparison results",
-		Long:  "Execute all fixtures in a corpus directory, comparing oracle (sequential) vs probe (BlockSTM) execution, and report results in human-readable format.",
+		Long: "Execute all fixtures in a corpus directory and report comparison results.\n\n" +
+				"With --probes=1 (default, F1 mode): compare oracle (sequential) vs a single BlockSTM probe.\n" +
+				"With --probes=N (N>1, F2 mode): run 1 oracle + N BlockSTM probes with distinct scheduler\n" +
+				"perturbations and compare all probes against each other to detect non-determinism.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			corpus, _ := cmd.Flags().GetString("corpus")
 			probes, _ := cmd.Flags().GetInt("probes")
@@ -45,7 +48,12 @@ func NewCommand() *cobra.Command {
 				FailOnDivergence: failOnDiv,
 			}
 
-			exec := NewFixtureExecutor()
+			var exec Executor
+			if probes > 1 {
+				exec = NewRepeatRunExecutor(probes)
+			} else {
+				exec = NewFixtureExecutor()
+			}
 			code := RunHarness(cfg, exec, stores, rep, os.Stderr)
 			if code != 0 {
 				os.Exit(code)

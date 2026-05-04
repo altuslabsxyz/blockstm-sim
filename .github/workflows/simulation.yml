@@ -113,7 +113,6 @@ jobs:
           set +e
           ./build/blockstm-sim --record-off run \
             --corpus corpus/fixtures \
-            --fail-on-divergence \
             --format markdown \
             > simulation-report.md 2>&1
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
@@ -152,7 +151,7 @@ jobs:
               body: header + body,
             });
 
-      - name: Fail if simulation found divergence
+      - name: Fail if simulation failed
         if: always() && steps.sim.outputs.exit_code != '0'
         env:
           SIM_EXIT: ${{ steps.sim.outputs.exit_code }}

@@ -28,6 +28,7 @@ type BlockObserver struct {
 	trackers  []MutationTracker
 	snapshots [][][]byte         // snapshots[txIdx][trackerIdx] = pre-tx snapshot
 	mutSets   [][]MutationRecord // mutSets[txIdx] = mutations detected in tx
+	txSetters []TxIndexSetter
 }
 
 var _ lifecycle.LifecycleObserver = (*BlockObserver)(nil)
@@ -43,17 +44,27 @@ func NewBlockObserver(txCount int, trackers ...MutationTracker) *BlockObserver {
 	for i := range snaps {
 		snaps[i] = make([][]byte, len(trackers))
 	}
+	var setters []TxIndexSetter
+	for _, tracker := range trackers {
+		if setter, ok := tracker.(TxIndexSetter); ok {
+			setters = append(setters, setter)
+		}
+	}
 	return &BlockObserver{
 		writeSets: ws,
 		trackers:  trackers,
 		snapshots: snaps,
 		mutSets:   make([][]MutationRecord, txCount),
+		txSetters: setters,
 	}
 }
 
 func (o *BlockObserver) OnTxStart(txIndex int) {
 	if txIndex < len(o.writeSets) {
 		o.writeSets[txIndex] = make(map[string]struct{})
+	}
+	for _, setter := range o.txSetters {
+		setter.SetCurrentTx(txIndex)
 	}
 	if txIndex < len(o.snapshots) {
 		for i, t := range o.trackers {

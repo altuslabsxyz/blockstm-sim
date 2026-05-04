@@ -45,6 +45,7 @@ type TxSpec struct {
 	Gas    uint64 `json:"gas"`
 	Key    string `json:"key,omitempty"`
 	Value  int64  `json:"value,omitempty"`
+	Field  string `json:"field,omitempty"`
 }
 
 func LoadFixture(dir, name string) (Fixture, error) {

@@ -374,3 +374,37 @@ func TestRun_OutOfKVStoreMutation_NoMutation_NoFinding(t *testing.T) {
 	require.Equal(t, compare.Match, result.Verdict)
 	require.Empty(t, result.Findings)
 }
+
+func TestRun_BlockContextMutation_GeneratesFinding(t *testing.T) {
+	tracker := compare.NewBlockContextTracker(map[string]string{"height": "10"})
+	tracker.SetCurrentTx(0)
+	tracker.ReadField("height")
+	tracker.SetCurrentTx(1)
+	tracker.WriteField("height", "999")
+
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	result, err := compare.Run(compare.Input{
+		Oracle:                oracle,
+		Probe:                 probe,
+		Block:                 &abci.RequestFinalizeBlock{Height: 1},
+		BlockContextMutations: tracker,
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Divergence, result.Verdict)
+	require.Len(t, result.Findings, 1)
+	f := result.Findings[0]
+	require.Equal(t, compare.DimBlockContext, f.Dimension)
+	require.Equal(t, 1, f.TxIndex)
+	require.Contains(t, f.Oracle, "height")
+	require.Contains(t, f.Oracle, "readers=0")
+	require.Contains(t, f.Probe, "after=999")
+}

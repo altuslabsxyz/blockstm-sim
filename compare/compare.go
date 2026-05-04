@@ -14,12 +14,13 @@ type Finalizer interface {
 }
 
 type Input struct {
-	Oracle          Finalizer
-	Probe           Finalizer
-	Block           *abci.RequestFinalizeBlock
-	OracleWriteSets WriteSetProvider
-	ProbeWriteSets  WriteSetProvider
-	OracleMutations MutationProvider
+	Oracle                Finalizer
+	Probe                 Finalizer
+	Block                 *abci.RequestFinalizeBlock
+	OracleWriteSets       WriteSetProvider
+	ProbeWriteSets        WriteSetProvider
+	OracleMutations       MutationProvider
+	BlockContextMutations BlockContextMutationProvider
 }
 
 func Run(input Input) (*Result, error) {
@@ -60,11 +61,11 @@ func Run(input Input) (*Result, error) {
 		for i := 0; i < txCount; i++ {
 			oWS := input.OracleWriteSets.TxWriteSet(i)
 			pWS := input.ProbeWriteSets.TxWriteSet(i)
-			if !equalStrSlice(oWS, pWS) {
+			if !EqualStrSlice(oWS, pWS) {
 				findings = append(findings, NewFinding(
 					height, DimWriteSet, i, 0,
-					formatWriteSet(oWS),
-					formatWriteSet(pWS),
+					FormatWriteSet(oWS),
+					FormatWriteSet(pWS),
 				))
 			}
 		}
@@ -82,6 +83,16 @@ func Run(input Input) (*Result, error) {
 		}
 	}
 
+	if input.BlockContextMutations != nil {
+		for _, m := range input.BlockContextMutations.BlockContextMutations() {
+			findings = append(findings, NewFinding(
+				height, DimBlockContext, m.WriterTx, 0,
+				fmt.Sprintf("field=%s;before=%s;readers=%s", m.Field, m.Before, joinInts(m.ReaderTxs)),
+				fmt.Sprintf("field=%s;after=%s;writer=tx%d", m.Field, m.After, m.WriterTx),
+			))
+		}
+	}
+
 	if len(findings) > 0 {
 		result.Verdict = Divergence
 		result.Findings = findings
@@ -92,7 +103,9 @@ func Run(input Input) (*Result, error) {
 	return result, nil
 }
 
-func equalStrSlice(a, b []string) bool {
+// EqualStrSlice reports whether a and b contain the same strings in the same
+// order.
+func EqualStrSlice(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -104,7 +117,9 @@ func equalStrSlice(a, b []string) bool {
 	return true
 }
 
-func formatWriteSet(keys []string) string {
+// FormatWriteSet returns a human-readable summary of a write-set key list,
+// truncating to the first 5 keys when the slice is longer.
+func FormatWriteSet(keys []string) string {
 	if len(keys) == 0 {
 		return "(empty)"
 	}
