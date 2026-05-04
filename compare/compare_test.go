@@ -327,7 +327,7 @@ func TestRun_OutOfKVStoreMutation_Detected(t *testing.T) {
 	result, err := compare.Run(compare.Input{
 		Oracle:          &errorCodeFinalizer{oracle, []uint32{0}},
 		Probe:           &errorCodeFinalizer{probe, []uint32{0}},
-		Block:           &abci.RequestFinalizeBlock{Height: 1, Txs: [][]byte{{0x00}}},
+		Block:           &abci.RequestFinalizeBlock{Height: 1},
 		OracleMutations: oracleMuts,
 	})
 	require.NoError(t, err)
