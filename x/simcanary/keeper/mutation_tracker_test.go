@@ -40,4 +40,8 @@ func TestKeeper_SnapshotOutOfKVStoreState_Deterministic(t *testing.T) {
 	snap1 := k.SnapshotOutOfKVStoreState()
 	snap2 := k.SnapshotOutOfKVStoreState()
 	require.Equal(t, snap1, snap2, "same state must produce identical snapshots")
+
+	// Verify sort order: "a" must come before "b" in the output.
+	expected := "a=0000000000000001\nb=0000000000000002\n"
+	require.Equal(t, []byte(expected), snap1, "keys must be sorted lexicographically")
 }

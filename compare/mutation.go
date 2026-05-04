@@ -12,9 +12,8 @@ type MutationTracker interface {
 	TrackerName() string
 
 	// SnapshotOutOfKVStoreState returns a deterministic byte serialization of
-	// all out-of-KVStore mutable state. An empty slice means no mutable state
-	// is present. The encoding must be deterministic (sorted keys, fixed-width
-	// values).
+	// all out-of-KVStore mutable state. nil means no mutable state is present.
+	// The encoding must be deterministic (sorted keys, fixed-width values).
 	SnapshotOutOfKVStoreState() []byte
 }
 
