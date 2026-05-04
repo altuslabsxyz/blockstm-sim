@@ -1,6 +1,7 @@
-name: Simulation
+name: Internal SDK Tests
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
@@ -17,12 +18,18 @@ permissions:
   contents: read
   pull-requests: write
 
-env:
-  STABLE_SDK_BRANCH: ${{ vars.STABLE_SDK_BRANCH || 'stable' }}
-
 jobs:
   simulate:
     runs-on: ubuntu-latest
+    env:
+      PRIVATE_SDK_REPOSITORY: ${{ vars.PRIVATE_SDK_REPOSITORY }}
+      PRIVATE_SDK_REF: ${{ vars.PRIVATE_SDK_REF }}
+      PRIVATE_SDK_TOKEN: ${{ secrets.PRIVATE_SDK_TOKEN }}
+      PRIVATE_SDK_DIR: /tmp/private-sdk
+      PRIVATE_COMET_REPOSITORY: ${{ vars.PRIVATE_COMET_REPOSITORY }}
+      PRIVATE_COMET_REF: ${{ vars.PRIVATE_COMET_REF }}
+      PRIVATE_COMET_TOKEN: ${{ secrets.PRIVATE_COMET_TOKEN }}
+      PRIVATE_COMET_DIR: /tmp/private-comet
 
     steps:
       - name: Checkout blockstm-sim
@@ -30,22 +37,45 @@ jobs:
         with:
           path: blockstm-sim
 
-      - name: Checkout stable-sdk
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ vars.STABLE_SDK_REPO }}
-          ref: ${{ env.STABLE_SDK_BRANCH }}
-          token: ${{ secrets.STABLE_SDK_TOKEN }}
-          path: stable-sdk
-
-      - name: Verify stable-sdk layout
+      - name: Checkout SDK source
         run: |
-          if [ ! -f "stable-sdk/go.mod" ]; then
-            echo "::error::stable-sdk/go.mod not found — STABLE_SDK_BRANCH ('${STABLE_SDK_BRANCH}') likely resolved to the wrong branch or a branch that does not contain the cosmos-sdk fork. Set the STABLE_SDK_BRANCH repository variable to the correct branch (e.g. feat/pla-55-stable-sdk-pr-4-scheduler-perturbhook)."
+          set -euo pipefail
+          if [ -z "${PRIVATE_SDK_REPOSITORY}" ] || [ -z "${PRIVATE_SDK_REF}" ] || [ -z "${PRIVATE_SDK_TOKEN}" ]; then
+            echo "::error::PRIVATE_SDK_REPOSITORY, PRIVATE_SDK_REF, and PRIVATE_SDK_TOKEN must be configured."
             exit 1
           fi
-          if [ ! -f "stable-sdk/store/go.mod" ]; then
-            echo "::error::stable-sdk/store/go.mod not found — the checked-out branch does not contain the modular cosmos-sdk store submodule. STABLE_SDK_BRANCH='${STABLE_SDK_BRANCH}'."
+          rm -rf "${PRIVATE_SDK_DIR}"
+          git clone --quiet --depth=1 \
+            "https://x-access-token:${PRIVATE_SDK_TOKEN}@github.com/${PRIVATE_SDK_REPOSITORY}.git" \
+            "${PRIVATE_SDK_DIR}"
+          git -C "${PRIVATE_SDK_DIR}" fetch --quiet --depth=1 origin "${PRIVATE_SDK_REF}"
+          git -C "${PRIVATE_SDK_DIR}" checkout --quiet FETCH_HEAD
+
+      - name: Checkout consensus source
+        if: ${{ vars.PRIVATE_COMET_REPOSITORY != '' && vars.PRIVATE_COMET_REF != '' }}
+        run: |
+          set -euo pipefail
+          token="${PRIVATE_COMET_TOKEN:-${PRIVATE_SDK_TOKEN}}"
+          if [ -z "${token}" ]; then
+            echo "::error::A token is required to checkout the configured consensus source."
+            exit 1
+          fi
+          rm -rf "${PRIVATE_COMET_DIR}"
+          git clone --quiet --depth=1 \
+            "https://x-access-token:${token}@github.com/${PRIVATE_COMET_REPOSITORY}.git" \
+            "${PRIVATE_COMET_DIR}"
+          git -C "${PRIVATE_COMET_DIR}" fetch --quiet --depth=1 origin "${PRIVATE_COMET_REF}"
+          git -C "${PRIVATE_COMET_DIR}" checkout --quiet FETCH_HEAD
+
+      - name: Verify SDK layout
+        run: |
+          set -euo pipefail
+          if [ ! -f "${PRIVATE_SDK_DIR}/go.mod" ]; then
+            echo "::error::SDK go.mod not found."
+            exit 1
+          fi
+          if [ ! -f "${PRIVATE_SDK_DIR}/store/go.mod" ]; then
+            echo "::error::SDK store module not found."
             exit 1
           fi
 
@@ -56,15 +86,25 @@ jobs:
           cache: true
           cache-dependency-path: blockstm-sim/go.sum
 
+      - name: Prepare internal modfile
+        working-directory: blockstm-sim
+        run: |
+          set -euo pipefail
+          cp go.mod go.internal.mod
+          cp go.sum go.internal.sum
+          go mod edit -modfile=go.internal.mod -replace github.com/cosmos/cosmos-sdk="${PRIVATE_SDK_DIR}"
+          go mod edit -modfile=go.internal.mod -replace cosmossdk.io/store="${PRIVATE_SDK_DIR}/store"
+          if [ -d "${PRIVATE_COMET_DIR}" ]; then
+            go mod edit -modfile=go.internal.mod -replace github.com/cometbft/cometbft="${PRIVATE_COMET_DIR}"
+          fi
+
       - name: Build simharness+canary binary
         working-directory: blockstm-sim
-        env:
-          GONOSUMDB: "github.com/stablelabs/*"
-          GOPRIVATE: "github.com/stablelabs/*"
-          STABLE_SDK_TOKEN: ${{ secrets.STABLE_SDK_TOKEN }}
-        run: |
-          git config --global url."https://x-access-token:${STABLE_SDK_TOKEN}@github.com/stablelabs/".insteadOf "https://github.com/stablelabs/"
-          make build-canary
+        run: go build -modfile=go.internal.mod -tags "sdk_hooks simharness simharness_canary" -o build/blockstm-sim ./cmd/blockstm-sim
+
+      - name: Run internal tests
+        working-directory: blockstm-sim
+        run: go test -modfile=go.internal.mod -tags "sdk_hooks simharness simharness_canary" ./...
 
       - name: Run simulation corpus
         id: sim
