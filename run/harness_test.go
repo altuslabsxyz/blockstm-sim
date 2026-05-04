@@ -19,12 +19,19 @@ type mockExecutor struct {
 
 func (m *mockExecutor) Init(compare.GenesisSpec) error { return nil }
 func (m *mockExecutor) Close()                         {}
-func (m *mockExecutor) RunBlock(compare.BlockSpec, int64) (*compare.Result, error) {
+func (m *mockExecutor) RunBlock(block compare.BlockSpec, _ int64) (*compare.Result, error) {
+	var r *compare.Result
 	if m.idx >= len(m.results) {
-		return &compare.Result{Verdict: compare.Match}, nil
+		r = &compare.Result{Verdict: compare.Match}
+	} else {
+		r = m.results[m.idx]
+		m.idx++
 	}
-	r := m.results[m.idx]
-	m.idx++
+	// populate MsgKeys from block spec, mirroring what FixtureExecutor does
+	r.MsgKeys = make([]string, len(block.Txs))
+	for i, tx := range block.Txs {
+		r.MsgKeys[i] = tx.Msg
+	}
 	return r, nil
 }
 
@@ -166,4 +173,22 @@ func TestHarness_EmptyStores(t *testing.T) {
 	code := run.RunHarness(run.Config{CorpusDir: "/nonexistent"}, nil, nil, out, errOut)
 
 	require.Equal(t, 0, code)
+}
+
+func TestHarness_CoverageInFooter(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "01-test", "", 1)
+
+	exec := &mockExecutor{results: []*compare.Result{
+		{Verdict: compare.Match},
+	}}
+
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), out, errOut)
+
+	got := out.String()
+	// "bank-send" is registered by executor.init(); the fixture uses bank-send
+	require.Contains(t, got, "Coverage")
+	require.Contains(t, got, "bank")
+	require.Contains(t, got, "MsgSend")
 }

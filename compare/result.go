@@ -11,4 +11,5 @@ type Result struct {
 	Verdict  Verdict
 	Height   int64
 	Findings []Finding
+	MsgKeys  []string // fixture msg keys exercised in this block, one per tx
 }
