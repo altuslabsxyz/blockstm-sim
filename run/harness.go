@@ -58,17 +58,20 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, er
 			si, ok := exec.(StateInitializer)
 			if !ok {
 				fmt.Fprintf(errOut, "executor does not support state-based init for %s\n", name)
+				store.Close()
 				blockNum += store.BlockCount()
 				continue
 			}
 			if err := si.InitFromState(preStateDB); err != nil {
 				fmt.Fprintf(errOut, "init from state %s: %v\n", name, err)
+				store.Close()
 				blockNum += store.BlockCount()
 				continue
 			}
 		} else {
 			if err := exec.Init(store.Genesis()); err != nil {
 				fmt.Fprintf(errOut, "init fixture %s: %v\n", name, err)
+				store.Close()
 				blockNum += store.BlockCount()
 				continue
 			}

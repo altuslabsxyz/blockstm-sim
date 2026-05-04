@@ -10,6 +10,8 @@ import (
 	dbm "github.com/cosmos/cosmos-db"
 )
 
+var _ CorpusStore = (*SnapshotCorpus)(nil)
+
 // BlockLoader abstracts the CometBFT BlockStore for testability.
 type BlockLoader interface {
 	LoadBlock(height int64) *cmttypes.Block
@@ -39,7 +41,9 @@ func NewSnapshotCorpusFromDir(dir string) (*SnapshotCorpus, error) {
 
 	appDB, err := dbm.NewGoLevelDB("application", dir, nil)
 	if err != nil {
-		_ = bsDB.Close()
+		if closeErr := bsDB.Close(); closeErr != nil {
+			err = fmt.Errorf("%w (also failed to close blockstore: %v)", err, closeErr)
+		}
 		return nil, fmt.Errorf("open application.db: %w", err)
 	}
 

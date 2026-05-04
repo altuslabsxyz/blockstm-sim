@@ -30,5 +30,11 @@ func LoadRangeMeta(dir string) (RangeMeta, error) {
 	if m.Start <= 0 || m.End <= 0 || m.End < m.Start {
 		return RangeMeta{}, fmt.Errorf("invalid height range [%d, %d]", m.Start, m.End)
 	}
+	if m.ChainID == "" {
+		return RangeMeta{}, fmt.Errorf("range.json: chain_id is required")
+	}
+	if m.BondDenom == "" {
+		return RangeMeta{}, fmt.Errorf("range.json: bond_denom is required")
+	}
 	return m, nil
 }
