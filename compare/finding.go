@@ -9,9 +9,10 @@ import (
 type Dimension string
 
 const (
-	DimAppHash   Dimension = "app_hash"
-	DimErrorCode Dimension = "error_code"
-	DimWriteSet  Dimension = "write_set"
+	DimAppHash      Dimension = "app_hash"
+	DimErrorCode    Dimension = "error_code"
+	DimWriteSet     Dimension = "write_set"
+	DimOutOfKVStore Dimension = "out_of_kvstore"
 )
 
 type Finding struct {

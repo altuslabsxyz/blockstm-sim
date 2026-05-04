@@ -225,3 +225,15 @@ func sortedKeys(m map[string]compare.AccountSpec) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// ---------------------------------------------------------------------------
+// Mock mutation provider
+// ---------------------------------------------------------------------------
+
+type mockMutationProvider struct {
+	muts map[int][]compare.MutationRecord
+}
+
+func (m *mockMutationProvider) TxMutations(txIndex int) []compare.MutationRecord {
+	return m.muts[txIndex]
+}
