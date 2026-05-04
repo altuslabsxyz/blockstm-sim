@@ -14,12 +14,13 @@ type Finalizer interface {
 }
 
 type Input struct {
-	Oracle          Finalizer
-	Probe           Finalizer
-	Block           *abci.RequestFinalizeBlock
-	OracleWriteSets WriteSetProvider
-	ProbeWriteSets  WriteSetProvider
-	OracleMutations MutationProvider
+	Oracle                Finalizer
+	Probe                 Finalizer
+	Block                 *abci.RequestFinalizeBlock
+	OracleWriteSets       WriteSetProvider
+	ProbeWriteSets        WriteSetProvider
+	OracleMutations       MutationProvider
+	BlockContextMutations BlockContextMutationProvider
 }
 
 func Run(input Input) (*Result, error) {
@@ -79,6 +80,16 @@ func Run(input Input) (*Result, error) {
 					fmt.Sprintf("%s:%s", m.Tracker, hex.EncodeToString(m.After)),
 				))
 			}
+		}
+	}
+
+	if input.BlockContextMutations != nil {
+		for _, m := range input.BlockContextMutations.BlockContextMutations() {
+			findings = append(findings, NewFinding(
+				height, DimBlockContext, m.WriterTx, 0,
+				fmt.Sprintf("field=%s;before=%s;readers=%s", m.Field, m.Before, joinInts(m.ReaderTxs)),
+				fmt.Sprintf("field=%s;after=%s;writer=tx%d", m.Field, m.After, m.WriterTx),
+			))
 		}
 	}
 
