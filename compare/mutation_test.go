@@ -14,7 +14,7 @@ type fakeTracker struct {
 	state []byte
 }
 
-func (f *fakeTracker) TrackerName() string                { return f.name }
+func (f *fakeTracker) TrackerName() string               { return f.name }
 func (f *fakeTracker) SnapshotOutOfKVStoreState() []byte { return f.state }
 
 // Verify fakeTracker satisfies the interface at compile time.
