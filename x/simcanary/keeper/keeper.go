@@ -1,8 +1,11 @@
 package keeper
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
+	"sort"
 	"sync"
 
 	"cosmossdk.io/core/store"
@@ -43,4 +46,29 @@ func (k *Keeper) WriteToStore(ctx context.Context, key string, value int64) erro
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(value))
 	return kvStore.Set([]byte("canary/"+key), buf)
+}
+
+func (k *Keeper) TrackerName() string { return "simcanary.sharedMap" }
+
+func (k *Keeper) SnapshotOutOfKVStoreState() []byte {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if len(k.sharedMap) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(k.sharedMap))
+	for key := range k.sharedMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var buf bytes.Buffer
+	valBuf := make([]byte, 8)
+	for _, key := range keys {
+		binary.BigEndian.PutUint64(valBuf, uint64(k.sharedMap[key]))
+		buf.WriteString(key)
+		buf.WriteByte('=')
+		buf.WriteString(hex.EncodeToString(valBuf))
+		buf.WriteByte('\n')
+	}
+	return buf.Bytes()
 }
