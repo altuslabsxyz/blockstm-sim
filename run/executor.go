@@ -13,10 +13,11 @@ import (
 	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
 
+	"github.com/cosmos/cosmos-sdk/baseapp/lifecycle"
+	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/client"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/testutil/configurator"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -150,14 +151,26 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		txs = append(txs, txBytes)
 	}
 
-	return compare.Run(compare.Input{
+	oracleObs := compare.NewBlockObserver(len(txs))
+	probeObs := compare.NewBlockObserver(len(txs))
+	e.oracle.SetLifecycleObserver(oracleObs)
+	e.probe.SetLifecycleObserver(probeObs)
+
+	result, err := compare.Run(compare.Input{
 		Oracle: e.oracle,
 		Probe:  e.probe,
 		Block: &abci.RequestFinalizeBlock{
 			Height: height,
 			Txs:    txs,
 		},
+		OracleWriteSets: oracleObs,
+		ProbeWriteSets:  probeObs,
 	})
+
+	e.oracle.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
+	e.probe.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
+
+	return result, err
 }
 
 func (e *FixtureExecutor) Close() {
