@@ -118,6 +118,175 @@ func TestRun_Divergence(t *testing.T) {
 // Test 4: Finding ID is deterministic
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Test 5: DIVERGENCE on per-tx error code mismatch
+// ---------------------------------------------------------------------------
+
+func TestRun_ErrorCodeMismatch(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	result, err := compare.Run(compare.Input{
+		Oracle: &errorCodeFinalizer{oracle, []uint32{0, 5}},
+		Probe:  &errorCodeFinalizer{probe, []uint32{0, 7}},
+		Block:  &abci.RequestFinalizeBlock{Height: 1},
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Divergence, result.Verdict)
+
+	var errorFindings []compare.Finding
+	for _, f := range result.Findings {
+		if f.Dimension == compare.DimErrorCode {
+			errorFindings = append(errorFindings, f)
+		}
+	}
+	require.Len(t, errorFindings, 1, "only tx 1 has different codes")
+	require.Equal(t, 1, errorFindings[0].TxIndex)
+	require.Equal(t, "5", errorFindings[0].Oracle)
+	require.Equal(t, "7", errorFindings[0].Probe)
+}
+
+// ---------------------------------------------------------------------------
+// Test 6: MATCH when app hash matches and error codes match
+// ---------------------------------------------------------------------------
+
+func TestRun_AppHashMatch_ErrorCodesMatch(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	result, err := compare.Run(compare.Input{
+		Oracle: &errorCodeFinalizer{oracle, []uint32{0, 0}},
+		Probe:  &errorCodeFinalizer{probe, []uint32{0, 0}},
+		Block:  &abci.RequestFinalizeBlock{Height: 1},
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Match, result.Verdict)
+	require.Empty(t, result.Findings)
+}
+
+// ---------------------------------------------------------------------------
+// Test 7: DIVERGENCE when app hash matches but error codes differ
+// ---------------------------------------------------------------------------
+
+func TestRun_AppHashMatch_ErrorCodeDiverges(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	result, err := compare.Run(compare.Input{
+		Oracle: &errorCodeFinalizer{oracle, []uint32{0}},
+		Probe:  &errorCodeFinalizer{probe, []uint32{3}},
+		Block:  &abci.RequestFinalizeBlock{Height: 1},
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Divergence, result.Verdict,
+		"error code mismatch must produce DIVERGENCE even when AppHash matches")
+
+	require.Len(t, result.Findings, 1)
+	f := result.Findings[0]
+	require.Equal(t, compare.DimErrorCode, f.Dimension)
+	require.Equal(t, 0, f.TxIndex)
+}
+
+// ---------------------------------------------------------------------------
+// Test 8: Write set mismatch
+// ---------------------------------------------------------------------------
+
+func TestRun_WriteSetMismatch(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	oracleWS := &mockWriteSetProvider{sets: map[int][]string{
+		0: {"bank/01", "bank/02"},
+		1: {"simcanary/ab"},
+	}}
+	probeWS := &mockWriteSetProvider{sets: map[int][]string{
+		0: {"bank/01", "bank/02"},
+		1: {"simcanary/ab", "simcanary/cd"},
+	}}
+
+	result, err := compare.Run(compare.Input{
+		Oracle:          &errorCodeFinalizer{oracle, []uint32{0, 0}},
+		Probe:           &errorCodeFinalizer{probe, []uint32{0, 0}},
+		Block:           &abci.RequestFinalizeBlock{Height: 1},
+		OracleWriteSets: oracleWS,
+		ProbeWriteSets:  probeWS,
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Divergence, result.Verdict)
+
+	var wsFindings []compare.Finding
+	for _, f := range result.Findings {
+		if f.Dimension == compare.DimWriteSet {
+			wsFindings = append(wsFindings, f)
+		}
+	}
+	require.Len(t, wsFindings, 1, "only tx 1 has different write sets")
+	require.Equal(t, 1, wsFindings[0].TxIndex)
+}
+
+// ---------------------------------------------------------------------------
+// Test 9: Write set match produces no finding
+// ---------------------------------------------------------------------------
+
+func TestRun_WriteSetMatch(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	ws := &mockWriteSetProvider{sets: map[int][]string{
+		0: {"bank/01"},
+	}}
+
+	result, err := compare.Run(compare.Input{
+		Oracle:          &errorCodeFinalizer{oracle, []uint32{0}},
+		Probe:           &errorCodeFinalizer{probe, []uint32{0}},
+		Block:           &abci.RequestFinalizeBlock{Height: 1},
+		OracleWriteSets: ws,
+		ProbeWriteSets:  ws,
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Match, result.Verdict)
+	require.Empty(t, result.Findings)
+}
+
+// ---------------------------------------------------------------------------
+// Test 10: Finding ID is deterministic
+// ---------------------------------------------------------------------------
+
 func TestFindingID_Deterministic(t *testing.T) {
 	id1 := compare.FindingID(1, compare.DimAppHash, -1, 0)
 	id2 := compare.FindingID(1, compare.DimAppHash, -1, 0)

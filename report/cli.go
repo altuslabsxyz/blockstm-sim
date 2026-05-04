@@ -104,6 +104,10 @@ func detailsFor(dim compare.Dimension) string {
 	switch dim {
 	case compare.DimAppHash:
 		return "post-block app hash mismatch"
+	case compare.DimErrorCode:
+		return "per-tx error code mismatch"
+	case compare.DimWriteSet:
+		return "per-tx write set mismatch"
 	default:
 		return string(dim) + " mismatch"
 	}

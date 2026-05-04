@@ -37,8 +37,14 @@ func TestCanaryC1_DivergenceDetected(t *testing.T) {
 		if result.Verdict == compare.Divergence {
 			t.Logf("divergence detected on attempt %d/%d", attempt, maxAttempts)
 			require.NotEmpty(t, result.Findings)
-			require.Equal(t, compare.DimAppHash, result.Findings[0].Dimension)
-			require.NotEqual(t, result.Findings[0].Oracle, result.Findings[0].Probe)
+			var hasAppHash bool
+			for _, f := range result.Findings {
+				if f.Dimension == compare.DimAppHash {
+					require.NotEqual(t, f.Oracle, f.Probe)
+					hasAppHash = true
+				}
+			}
+			require.True(t, hasAppHash, "divergence must include app_hash finding")
 			diverged = true
 			break
 		}
@@ -62,9 +68,12 @@ func TestCanaryC1_HarnessE2E(t *testing.T) {
 			fixtureContent, 0o644,
 		))
 
+		stores, err := compare.LoadCorpusStores(dir)
+		require.NoError(t, err)
+
 		exec := run.NewFixtureExecutor()
 		out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-		code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, out, errOut)
+		code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, stores, out, errOut)
 
 		output := out.String()
 		if strings.Contains(output, "DIVERGENCE canary-01-keeper-map") {

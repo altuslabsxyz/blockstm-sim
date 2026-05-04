@@ -8,7 +8,11 @@ import (
 
 type Dimension string
 
-const DimAppHash Dimension = "app_hash"
+const (
+	DimAppHash   Dimension = "app_hash"
+	DimErrorCode Dimension = "error_code"
+	DimWriteSet  Dimension = "write_set"
+)
 
 type Finding struct {
 	ID         string

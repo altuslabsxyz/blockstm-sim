@@ -180,6 +180,40 @@ func (d *divergentFinalizer) FinalizeBlock(req *abci.RequestFinalizeBlock) (*abc
 }
 
 // ---------------------------------------------------------------------------
+// Error code finalizer (injects tx results with given codes)
+// ---------------------------------------------------------------------------
+
+type errorCodeFinalizer struct {
+	compare.Finalizer
+	codes []uint32
+}
+
+func (f *errorCodeFinalizer) FinalizeBlock(req *abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error) {
+	res, err := f.Finalizer.FinalizeBlock(req)
+	if err != nil {
+		return res, err
+	}
+	txResults := make([]*abci.ExecTxResult, len(f.codes))
+	for i, code := range f.codes {
+		txResults[i] = &abci.ExecTxResult{Code: code}
+	}
+	res.TxResults = txResults
+	return res, nil
+}
+
+// ---------------------------------------------------------------------------
+// Mock write set provider
+// ---------------------------------------------------------------------------
+
+type mockWriteSetProvider struct {
+	sets map[int][]string
+}
+
+func (m *mockWriteSetProvider) TxWriteSet(txIndex int) []string {
+	return m.sets[txIndex]
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
