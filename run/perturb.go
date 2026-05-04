@@ -4,7 +4,6 @@ package run
 
 import (
 	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
-	"github.com/cosmos/cosmos-sdk/internal/blockstm"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -42,5 +41,5 @@ func newSTMRunnerForProbe(cfg probeConfig, txDecoder sdk.TxDecoder) *txnrunner.S
 		return txnrunner.NewSTMRunner(txDecoder, nil, cfg.workers, false, nil)
 	}
 	return txnrunner.NewSTMRunner(txDecoder, nil, cfg.workers, false, nil,
-		txnrunner.WithHook(blockstm.NewPerturbHook(cfg.seed)))
+		txnrunner.WithPerturbHook(cfg.seed))
 }
