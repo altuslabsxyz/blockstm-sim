@@ -14,14 +14,27 @@ import (
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 	_ "github.com/altuslabsxyz/blockstm-sim/x/simcanary"
+	simcanarykeeper "github.com/altuslabsxyz/blockstm-sim/x/simcanary/keeper"
 	simcanarytypes "github.com/altuslabsxyz/blockstm-sim/x/simcanary/types"
 )
+
+// oracleCanaryKeeper is populated by depinject during oracle app setup in Init.
+var oracleCanaryKeeper *simcanarykeeper.Keeper
 
 func init() {
 	extraModuleOpts = append(extraModuleOpts, simcanaryModule())
 
 	extraTxBuilders["canary-map-set"] = buildCanaryMapSet
 	extraTxBuilders["canary-map-read-write"] = buildCanaryMapReadAndWrite
+
+	extraOracleOutputs = append(extraOracleOutputs, &oracleCanaryKeeper)
+
+	extraOracleMutTrackers = func() []compare.MutationTracker {
+		if oracleCanaryKeeper == nil {
+			return nil
+		}
+		return []compare.MutationTracker{oracleCanaryKeeper}
+	}
 }
 
 func simcanaryModule() configurator.ModuleOption {

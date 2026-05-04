@@ -39,8 +39,10 @@ import (
 type txBuilderFn func(spec compare.TxSpec, keys map[string]cryptotypes.PrivKey) ([]sdk.Msg, error)
 
 var (
-	extraModuleOpts []configurator.ModuleOption
-	extraTxBuilders = map[string]txBuilderFn{}
+	extraModuleOpts        []configurator.ModuleOption
+	extraTxBuilders        = map[string]txBuilderFn{}
+	extraOracleOutputs     []any
+	extraOracleMutTrackers func() []compare.MutationTracker
 )
 
 func buildAppConfig() depinject.Config {
@@ -118,7 +120,8 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 
 	baseCfg.DB = dbm.NewMemDB()
 	cfg := buildAppConfig()
-	oracleApp, err := simtestutil.SetupWithConfiguration(cfg, baseCfg, &txCfg)
+	oracleOutputs := append([]any{&txCfg}, extraOracleOutputs...)
+	oracleApp, err := simtestutil.SetupWithConfiguration(cfg, baseCfg, oracleOutputs...)
 	if err != nil {
 		return fmt.Errorf("setup oracle app: %w", err)
 	}
@@ -151,7 +154,12 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		txs = append(txs, txBytes)
 	}
 
-	oracleObs := compare.NewBlockObserver(len(txs))
+	var oracleTrackers []compare.MutationTracker
+	if extraOracleMutTrackers != nil {
+		oracleTrackers = extraOracleMutTrackers()
+	}
+
+	oracleObs := compare.NewBlockObserver(len(txs), oracleTrackers...)
 	probeObs := compare.NewBlockObserver(len(txs))
 	e.oracle.SetLifecycleObserver(oracleObs)
 	e.probe.SetLifecycleObserver(probeObs)
@@ -165,6 +173,7 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		},
 		OracleWriteSets: oracleObs,
 		ProbeWriteSets:  probeObs,
+		OracleMutations: oracleObs,
 	})
 
 	e.oracle.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
