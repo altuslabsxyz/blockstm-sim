@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -243,4 +244,22 @@ func StoreEqual(a, b storetypes.KVStore) bool {
 		iter1.Next()
 		iter2.Next()
 	}
+}
+
+func TestExecuteBlockWithEstimates_HookOption(t *testing.T) {
+	stores := map[storetypes.StoreKey]int{StoreKeyAuth: 0}
+	storage := NewMultiMemDB(stores)
+
+	var hookCalled atomic.Bool
+	hook := func(_ string) {
+		hookCalled.Store(true)
+	}
+
+	err := ExecuteBlockWithEstimates(
+		context.Background(), 2, stores, storage, 2, nil,
+		func(_ TxnIndex, _ MultiStore) {},
+		WithHook(hook),
+	)
+	require.NoError(t, err)
+	require.True(t, hookCalled.Load(), "hook should have been called")
 }

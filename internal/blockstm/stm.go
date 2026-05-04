@@ -21,10 +21,11 @@ func ExecuteBlock(
 	storage MultiStore,
 	executors int,
 	txExecutor TxExecutor,
+	opts ...SchedulerOption,
 ) error {
 	return ExecuteBlockWithEstimates(
 		ctx, blockSize, stores, storage, executors,
-		nil, txExecutor,
+		nil, txExecutor, opts...,
 	)
 }
 
@@ -36,6 +37,7 @@ func ExecuteBlockWithEstimates(
 	executors int,
 	estimates []MultiLocations, // txn -> multi-locations
 	txExecutor TxExecutor,
+	opts ...SchedulerOption,
 ) error {
 	if blockSize > math.MaxUint32 {
 		return fmt.Errorf("block size overflows uint32: %d", blockSize)
@@ -49,7 +51,7 @@ func ExecuteBlockWithEstimates(
 	}
 
 	// Create a new scheduler
-	scheduler := NewScheduler(blockSize)
+	scheduler := NewScheduler(blockSize, opts...)
 	mvMemory := NewMVMemoryWithEstimates(blockSize, stores, storage, scheduler, estimates)
 
 	// var wg sync.WaitGroup
