@@ -1,0 +1,33 @@
+name: canary-02-multi-key
+description: "C1: multiple keys written and read concurrently in one block"
+kind: canary
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "1000000stake"
+    carol:
+      balance: "1000000stake"
+    dave:
+      balance: "1000000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: canary-map-set
+        key: "x"
+        value: 10
+        gas: 200000
+      - signer: bob
+        msg: canary-map-set
+        key: "y"
+        value: 20
+        gas: 200000
+      - signer: carol
+        msg: canary-map-read-write
+        key: "x"
+        gas: 200000
+      - signer: dave
+        msg: canary-map-read-write
+        key: "y"
+        gas: 200000

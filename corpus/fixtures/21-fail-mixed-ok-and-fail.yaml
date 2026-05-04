@@ -1,0 +1,20 @@
+name: 21-fail-mixed-ok-and-fail
+description: First tx succeeds draining alice, second tx fails due to insufficient balance
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "500000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "999999stake"
+        gas: 200000
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "100stake"
+        gas: 200000

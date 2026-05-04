@@ -1,9 +1,12 @@
 package run
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/altuslabsxyz/blockstm-sim/compare"
 )
 
 func NewCommand() *cobra.Command {
@@ -16,6 +19,12 @@ func NewCommand() *cobra.Command {
 			probes, _ := cmd.Flags().GetInt("probes")
 			failOnDiv, _ := cmd.Flags().GetBool("fail-on-divergence")
 
+			stores, err := compare.LoadCorpusStores(corpus)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "load corpus: %v\n", err)
+				os.Exit(1)
+			}
+
 			cfg := Config{
 				CorpusDir:        corpus,
 				Probes:           probes,
@@ -23,7 +32,7 @@ func NewCommand() *cobra.Command {
 			}
 
 			exec := NewFixtureExecutor()
-			code := RunHarness(cfg, exec, os.Stdout, os.Stderr)
+			code := RunHarness(cfg, exec, stores, os.Stdout, os.Stderr)
 			if code != 0 {
 				os.Exit(code)
 			}

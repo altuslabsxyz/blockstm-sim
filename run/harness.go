@@ -1,6 +1,7 @@
 package run
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -20,21 +21,17 @@ type Config struct {
 	FailOnDivergence bool
 }
 
-func RunHarness(cfg Config, exec Executor, out, errOut io.Writer) int {
+func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, errOut io.Writer) int {
 	rep := report.NewCLI(out, errOut)
 
-	fixtures, err := compare.LoadCorpus(cfg.CorpusDir)
-	if err != nil {
-		fmt.Fprintf(errOut, "load corpus: %v\n", err)
-		return 1
-	}
-
 	totalBlocks := 0
-	for _, f := range fixtures {
-		totalBlocks += len(f.Blocks)
+	for _, s := range stores {
+		totalBlocks += s.BlockCount()
 	}
 
 	rep.Header(cfg.CorpusDir, totalBlocks, cfg.Probes)
+
+	ctx := context.Background()
 
 	var (
 		okCount         int
@@ -44,35 +41,45 @@ func RunHarness(cfg Config, exec Executor, out, errOut io.Writer) int {
 		blockNum        int
 	)
 
-	for _, fixture := range fixtures {
-		if err := exec.Init(fixture.Genesis); err != nil {
-			fmt.Fprintf(errOut, "init fixture %s: %v\n", fixture.Name, err)
-			blockNum += len(fixture.Blocks)
+	for _, store := range stores {
+		name := store.Name()
+		isCanary := store.IsCanary()
+
+		if err := exec.Init(store.Genesis()); err != nil {
+			fmt.Fprintf(errOut, "init fixture %s: %v\n", name, err)
+			blockNum += store.BlockCount()
 			continue
 		}
 
-		for i, block := range fixture.Blocks {
-			blockNum++
-			result, err := exec.RunBlock(block, int64(i+1))
+		var height int64
+		for block, err := range store.Iter(ctx) {
 			if err != nil {
-				fmt.Fprintf(errOut, "run block %d of %s: %v\n", i+1, fixture.Name, err)
+				fmt.Fprintf(errOut, "iter fixture %s: %v\n", name, err)
+				break
+			}
+			height++
+			blockNum++
+
+			result, err := exec.RunBlock(block, height)
+			if err != nil {
+				fmt.Fprintf(errOut, "run block %d of %s: %v\n", height, name, err)
 				continue
 			}
 
 			outcome := report.BlockOutcome{
 				Index:       blockNum,
 				Total:       totalBlocks,
-				FixtureName: fixture.Name,
-				IsCanary:    fixture.IsCanary(),
+				FixtureName: name,
+				IsCanary:    isCanary,
 				Verdict:     result.Verdict,
 				Findings:    result.Findings,
 			}
 			rep.Block(outcome)
 
 			switch {
-			case fixture.IsCanary() && result.Verdict == compare.Divergence:
+			case isCanary && result.Verdict == compare.Divergence:
 				canaryExpected++
-			case fixture.IsCanary() && result.Verdict == compare.Match:
+			case isCanary && result.Verdict == compare.Match:
 				canaryMissed++
 			case result.Verdict == compare.Match:
 				okCount++
@@ -81,6 +88,7 @@ func RunHarness(cfg Config, exec Executor, out, errOut io.Writer) int {
 			}
 		}
 
+		store.Close()
 		exec.Close()
 	}
 

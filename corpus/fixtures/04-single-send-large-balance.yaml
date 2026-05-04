@@ -1,0 +1,15 @@
+name: 04-single-send-large-balance
+description: Sender with 10^18 balance sends nearly all to receiver
+genesis:
+  accounts:
+    sender:
+      balance: "1000000000000000000stake"
+    receiver:
+      balance: "1stake"
+blocks:
+  - txs:
+      - signer: sender
+        msg: bank-send
+        to: receiver
+        amount: "999999999999999999stake"
+        gas: 200000

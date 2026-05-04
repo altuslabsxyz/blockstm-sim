@@ -1,0 +1,21 @@
+name: canary-04-multiblock-shared
+description: "C1: cross-block shared-map persistence with write then read"
+kind: canary
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "1000000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: canary-map-set
+        key: "k"
+        value: 42
+        gas: 200000
+  - txs:
+      - signer: bob
+        msg: canary-map-read-write
+        key: "k"
+        gas: 200000

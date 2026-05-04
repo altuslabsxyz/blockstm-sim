@@ -1,0 +1,20 @@
+name: 10-conflict-same-sender
+description: Same sender sends twice in one block
+genesis:
+  accounts:
+    alice:
+      balance: "2000000stake"
+    bob:
+      balance: "500000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "100stake"
+        gas: 200000
+      - signer: alice
+        msg: bank-send
+        to: bob
+        amount: "200stake"
+        gas: 200000

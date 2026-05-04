@@ -1,0 +1,13 @@
+name: 05-single-send-self
+description: Alice sends to herself
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: bank-send
+        to: alice
+        amount: "100stake"
+        gas: 200000
