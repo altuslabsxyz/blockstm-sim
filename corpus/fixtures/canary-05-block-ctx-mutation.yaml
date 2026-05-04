@@ -1,0 +1,20 @@
+name: canary-05-block-ctx-mutation
+description: "C5: block context field read by tx0, mutated by tx1"
+kind: canary
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "1000000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: canary-ctx-read
+        field: "height"
+        gas: 200000
+      - signer: bob
+        msg: canary-ctx-write
+        field: "height"
+        key: "999"
+        gas: 200000

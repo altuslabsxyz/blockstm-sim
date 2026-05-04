@@ -72,6 +72,12 @@ func TestMsgTypeRegistration(t *testing.T) {
 	typ = proto.MessageType("simcanary.v1.MsgCanaryMapReadAndWrite")
 	require.NotNil(t, typ, "MsgCanaryMapReadAndWrite should be registered")
 
+	typ = proto.MessageType("simcanary.v1.MsgCanaryBlockContextSet")
+	require.NotNil(t, typ, "MsgCanaryBlockContextSet should be registered")
+
+	typ = proto.MessageType("simcanary.v1.MsgCanaryBlockContextRead")
+	require.NotNil(t, typ, "MsgCanaryBlockContextRead should be registered")
+
 	name := proto.MessageName(&types.MsgCanaryMapSet{})
 	require.Equal(t, "simcanary.v1.MsgCanaryMapSet", name)
 }

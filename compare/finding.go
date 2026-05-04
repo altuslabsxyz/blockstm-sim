@@ -13,6 +13,7 @@ const (
 	DimErrorCode    Dimension = "error_code"
 	DimWriteSet     Dimension = "write_set"
 	DimOutOfKVStore Dimension = "out_of_kvstore"
+	DimBlockContext Dimension = "block_context"
 )
 
 type Finding struct {

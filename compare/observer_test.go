@@ -135,3 +135,21 @@ func TestBlockObserver_NoTrackers_BackwardCompat(t *testing.T) {
 	obs.OnTxEnd(0, nil)
 	require.Nil(t, obs.TxMutations(0))
 }
+
+type fakeSetterTracker struct {
+	fakeTracker
+	currentTx int
+}
+
+func (f *fakeSetterTracker) SetCurrentTx(txIndex int) { f.currentTx = txIndex }
+
+func TestBlockObserver_TxIndexSetter_CalledOnStart(t *testing.T) {
+	setter := &fakeSetterTracker{fakeTracker: fakeTracker{name: "t", state: []byte("v")}}
+	obs := compare.NewBlockObserver(3, setter)
+
+	obs.OnTxStart(0)
+	require.Equal(t, 0, setter.currentTx)
+
+	obs.OnTxStart(2)
+	require.Equal(t, 2, setter.currentTx)
+}

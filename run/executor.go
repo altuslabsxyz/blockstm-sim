@@ -134,10 +134,11 @@ func buildTx(
 type txBuilderFn func(spec compare.TxSpec, keys map[string]cryptotypes.PrivKey) ([]sdk.Msg, error)
 
 var (
-	extraModuleOpts        []configurator.ModuleOption
-	extraTxBuilders        = map[string]txBuilderFn{}
-	extraOracleOutputs     []any
-	extraOracleMutTrackers func() []compare.MutationTracker
+	extraModuleOpts            []configurator.ModuleOption
+	extraTxBuilders            = map[string]txBuilderFn{}
+	extraOracleOutputs         []any
+	extraOracleMutTrackers     func() []compare.MutationTracker
+	extraOracleBlockCtxTracker func(height int64) *compare.BlockContextTracker
 )
 
 func buildAppConfig() depinject.Config {
@@ -214,9 +215,17 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		txs = append(txs, txBytes)
 	}
 
-	var oracleTrackers []compare.MutationTracker
+	var blockCtxTracker *compare.BlockContextTracker
+	if extraOracleBlockCtxTracker != nil {
+		blockCtxTracker = extraOracleBlockCtxTracker(height)
+	}
+
+	oracleTrackers := []compare.MutationTracker{}
 	if extraOracleMutTrackers != nil {
 		oracleTrackers = extraOracleMutTrackers()
+	}
+	if blockCtxTracker != nil {
+		oracleTrackers = append(oracleTrackers, blockCtxTracker)
 	}
 
 	oracleObs := compare.NewBlockObserver(len(txs), oracleTrackers...)
@@ -231,9 +240,10 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 			Height: height,
 			Txs:    txs,
 		},
-		OracleWriteSets: oracleObs,
-		ProbeWriteSets:  probeObs,
-		OracleMutations: oracleObs,
+		OracleWriteSets:       oracleObs,
+		ProbeWriteSets:        probeObs,
+		OracleMutations:       oracleObs,
+		BlockContextMutations: blockCtxTracker,
 	})
 
 	e.oracle.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
