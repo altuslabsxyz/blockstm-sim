@@ -4,6 +4,7 @@ package run
 
 import (
 	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
+	"github.com/cosmos/cosmos-sdk/internal/blockstm"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -35,6 +36,11 @@ func generateProbeConfigs(n int) []probeConfig {
 }
 
 // newSTMRunnerForProbe builds a *txnrunner.STMRunner for the given probeConfig.
+// Probe with seed=0 gets a plain STM runner; seed>0 gets a perturbed runner.
 func newSTMRunnerForProbe(cfg probeConfig, txDecoder sdk.TxDecoder) *txnrunner.STMRunner {
-	return txnrunner.NewSTMRunner(txDecoder, nil, cfg.workers, false, nil)
+	if cfg.seed == 0 {
+		return txnrunner.NewSTMRunner(txDecoder, nil, cfg.workers, false, nil)
+	}
+	return txnrunner.NewSTMRunner(txDecoder, nil, cfg.workers, false, nil,
+		txnrunner.WithHook(blockstm.NewPerturbHook(cfg.seed)))
 }
