@@ -1,0 +1,26 @@
+name: canary-06-block-ctx-multifield
+description: "C6: two txs read height, final tx mutates it and reports both readers"
+kind: canary
+genesis:
+  accounts:
+    alice:
+      balance: "1000000stake"
+    bob:
+      balance: "1000000stake"
+    charlie:
+      balance: "1000000stake"
+blocks:
+  - txs:
+      - signer: alice
+        msg: canary-ctx-read
+        field: "height"
+        gas: 200000
+      - signer: bob
+        msg: canary-ctx-read
+        field: "height"
+        gas: 200000
+      - signer: charlie
+        msg: canary-ctx-write
+        field: "height"
+        key: "0"
+        gas: 200000
