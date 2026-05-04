@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 
+	dbm "github.com/cosmos/cosmos-db"
+
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 	"github.com/altuslabsxyz/blockstm-sim/report"
 )
@@ -13,6 +15,13 @@ type Executor interface {
 	Init(genesis compare.GenesisSpec) error
 	RunBlock(block compare.BlockSpec, height int64) (*compare.Result, error)
 	Close()
+}
+
+// StateInitializer is an optional interface for executors that can initialise
+// from an existing multistore rather than from a genesis spec.
+// Requires stable-sdk PR-3b (CacheMultiStoreWithVersion) to be merged.
+type StateInitializer interface {
+	InitFromState(preStateDB dbm.DB) error
 }
 
 type Config struct {
@@ -45,10 +54,24 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, out, er
 		name := store.Name()
 		isCanary := store.IsCanary()
 
-		if err := exec.Init(store.Genesis()); err != nil {
-			fmt.Fprintf(errOut, "init fixture %s: %v\n", name, err)
-			blockNum += store.BlockCount()
-			continue
+		if preStateDB := store.PreStateDB(); preStateDB != nil {
+			si, ok := exec.(StateInitializer)
+			if !ok {
+				fmt.Fprintf(errOut, "executor does not support state-based init for %s\n", name)
+				blockNum += store.BlockCount()
+				continue
+			}
+			if err := si.InitFromState(preStateDB); err != nil {
+				fmt.Fprintf(errOut, "init from state %s: %v\n", name, err)
+				blockNum += store.BlockCount()
+				continue
+			}
+		} else {
+			if err := exec.Init(store.Genesis()); err != nil {
+				fmt.Fprintf(errOut, "init fixture %s: %v\n", name, err)
+				blockNum += store.BlockCount()
+				continue
+			}
 		}
 
 		var localHeight int64
