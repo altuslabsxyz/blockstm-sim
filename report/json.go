@@ -102,6 +102,6 @@ func (r *JSONReporter) Footer(s Summary, failOnDivergence bool) {
 	enc := json.NewEncoder(r.out)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(doc); err != nil {
-		fmt.Fprintf(r.out, "{\"error\":%q}\n", err.Error())
+		_, _ = fmt.Fprintf(r.out, "{\"error\":%q}\n", err.Error())
 	}
 }

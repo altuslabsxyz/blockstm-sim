@@ -55,9 +55,11 @@ blockstm-sim with the snapshot corpus.`,
 				return fmt.Errorf("write range.json: %w", err)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(),
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(),
 				"range.json written to %s\n\nNext steps:\n  cp -r %s/blockstore.db %s/\n  cp -r %s/application.db %s/\n",
-				outDir, sourceDir, outDir, sourceDir, outDir)
+				outDir, sourceDir, outDir, sourceDir, outDir); err != nil {
+				return fmt.Errorf("write next-steps message: %w", err)
+			}
 			return nil
 		},
 	}
@@ -85,7 +87,7 @@ func validateBlockstore(dir string, start, end int64) error {
 	if err != nil {
 		return fmt.Errorf("open blockstore.db in %s: %w", dir, err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	bs := cmtstore.NewBlockStore(db)
 	if bs.Base() > start {
