@@ -473,3 +473,38 @@ func TestSTMRunner_Integration(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, blk.Size())
 }
+
+// TestSTMRunner_SchedulerHookFires verifies that a hook installed via
+// WithSchedulerOptions(WithHook(...)) is actually called during block execution.
+func TestSTMRunner_SchedulerHookFires(t *testing.T) {
+	var called atomic.Bool
+
+	hook := func(phase string) {
+		called.Store(true)
+	}
+
+	stores := []storetypes.StoreKey{StoreKeyAuth, StoreKeyBank}
+	runner := NewSTMRunner(nil, stores, 2, false, nil, WithSchedulerOptions(WithHook(hook)))
+
+	ctx := context.Background()
+	storeIndex := map[storetypes.StoreKey]int{
+		StoreKeyAuth: 0,
+		StoreKeyBank: 1,
+	}
+	ms := msWrapper{NewMultiMemDB(storeIndex)}
+
+	txs := [][]byte{
+		{0x01},
+		{0x02},
+	}
+
+	deliverTx := func(tx []byte, memTx sdk.Tx, ms storetypes.MultiStore, txIndex int, cache map[string]any) *abci.ExecTxResult {
+		return &abci.ExecTxResult{Code: 0}
+	}
+
+	results, err := runner.Run(ctx, ms, txs, deliverTx)
+
+	require.NoError(t, err)
+	require.Len(t, results, len(txs))
+	require.True(t, called.Load(), "scheduler hook should have been called at least once")
+}

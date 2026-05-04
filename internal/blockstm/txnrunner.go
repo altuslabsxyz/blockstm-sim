@@ -15,28 +15,46 @@ import (
 
 var _ sdk.TxRunner = STMRunner{}
 
+// STMRunnerOption configures an STMRunner.
+type STMRunnerOption func(*STMRunner)
+
+// WithSchedulerOptions returns an STMRunnerOption that configures the underlying
+// BlockSTM scheduler with the given options (e.g. WithHook for phase boundary callbacks).
+func WithSchedulerOptions(opts ...SchedulerOption) STMRunnerOption {
+	return func(r *STMRunner) {
+		r.schedulerOpts = append(r.schedulerOpts, opts...)
+	}
+}
+
 func NewSTMRunner(
 	txDecoder sdk.TxDecoder,
 	stores []storetypes.StoreKey,
-	workers int, estimate bool,
+	workers int,
+	estimate bool,
 	coinDenom func(storetypes.MultiStore) string,
+	opts ...STMRunnerOption,
 ) *STMRunner {
-	return &STMRunner{
+	r := &STMRunner{
 		txDecoder: txDecoder,
 		stores:    stores,
 		workers:   workers,
 		estimate:  estimate,
 		coinDenom: coinDenom,
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // STMRunner simple implementation of block-stm
 type STMRunner struct {
-	txDecoder sdk.TxDecoder
-	stores    []storetypes.StoreKey
-	workers   int
-	estimate  bool
-	coinDenom func(storetypes.MultiStore) string
+	txDecoder     sdk.TxDecoder
+	stores        []storetypes.StoreKey
+	workers       int
+	estimate      bool
+	coinDenom     func(storetypes.MultiStore) string
+	schedulerOpts []SchedulerOption
 }
 
 func (e STMRunner) Run(ctx context.Context, ms storetypes.MultiStore, txs [][]byte, deliverTx sdk.DeliverTxFunc) ([]*abci.ExecTxResult, error) {
@@ -99,6 +117,7 @@ func (e STMRunner) Run(ctx context.Context, ms storetypes.MultiStore, txs [][]by
 				incarnationCache[txn].Store(v)
 			}
 		},
+		e.schedulerOpts...,
 	); err != nil {
 		return nil, err
 	}
