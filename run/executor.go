@@ -179,7 +179,7 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	if err != nil {
 		return fmt.Errorf("setup oracle app: %w", err)
 	}
-	instrument.InstrumentApp(oracleApp, instrument.Options{Runner: instrument.RunnerSequential})
+	instrument.InstrumentSTM(oracleApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), nil, 1, false, nil))
 
 	probeApp, err := initApp(cfg, gs.baseCfg, nil)
 	if err != nil {
