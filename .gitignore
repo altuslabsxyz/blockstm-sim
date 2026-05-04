@@ -20,3 +20,10 @@ docs/superpowers/
 Thumbs.db
 
 .run-records/
+
+go.internal.mod
+go.internal.sum
+.private-sdk/
+private-sdk/
+internal-sdk/
+tmp-private-sdk/

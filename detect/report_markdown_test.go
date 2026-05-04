@@ -11,12 +11,12 @@ import (
 func TestDetectMarkdownReporter_Title(t *testing.T) {
 	var buf bytes.Buffer
 	r := NewMarkdownReporter(&buf)
-	r.Header("../stable-sdk")
-	r.Footer(&ScanResult{Files: 10}, "../stable-sdk")
+	r.Header("../cosmos-sdk")
+	r.Footer(&ScanResult{Files: 10}, "../cosmos-sdk")
 
 	out := buf.String()
 	require.Contains(t, out, "# BlockSTM Sim — Detect Report")
-	require.Contains(t, out, "**SDK Path:** ../stable-sdk")
+	require.Contains(t, out, "**SDK Path:** ../cosmos-sdk")
 }
 
 func TestDetectMarkdownReporter_SummaryTable(t *testing.T) {

@@ -20,7 +20,7 @@ type Executor interface {
 
 // StateInitializer is an optional interface for executors that can initialise
 // from an existing multistore rather than from a genesis spec.
-// Requires stable-sdk PR-3b (CacheMultiStoreWithVersion) to be merged.
+// Requires SDK hook support for versioned multistore snapshots.
 type StateInitializer interface {
 	InitFromState(preStateDB dbm.DB) error
 }
