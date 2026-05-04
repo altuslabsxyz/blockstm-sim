@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/coverage"
 )
 
 type BlockOutcome struct {
@@ -26,6 +27,7 @@ type Summary struct {
 	CanaryExpected  int
 	CanaryMissed    int
 	ReporterErrors  int
+	Coverage        coverage.Report
 }
 
 func (s Summary) ExitCode(failOnDivergence bool) int {
@@ -73,8 +75,25 @@ func (r *CLIReporter) Block(o BlockOutcome) {
 
 func (r *CLIReporter) Footer(s Summary, failOnDivergence bool) {
 	exit := s.ExitCode(failOnDivergence)
-	r.write(fmt.Sprintf("\nSummary\n  %d blocks run / %d ok / %d divergence (%d canary expected) / %d canary missed\nExit: %d\n",
-		s.TotalBlocks, s.OKCount, s.DivergenceCount, s.CanaryExpected, s.CanaryMissed, exit))
+	r.write(fmt.Sprintf("\nSummary\n  %d blocks run / %d ok / %d divergence (%d canary expected) / %d canary missed\n",
+		s.TotalBlocks, s.OKCount, s.DivergenceCount, s.CanaryExpected, s.CanaryMissed))
+	r.writeCoverage(s.Coverage)
+	r.write(fmt.Sprintf("Exit: %d\n", exit))
+}
+
+func (r *CLIReporter) writeCoverage(cov coverage.Report) {
+	total := len(cov.Covered) + len(cov.Uncovered)
+	if total == 0 {
+		return
+	}
+	r.write(fmt.Sprintf("Coverage  registered=%d  covered=%d  uncovered=%d\n",
+		total, len(cov.Covered), len(cov.Uncovered)))
+	for _, s := range cov.Covered {
+		r.write(fmt.Sprintf("  %-14s %-26s %-16s %d tx\n", s.Module, s.MsgType, s.HandlerFn, s.Count))
+	}
+	for _, e := range cov.Uncovered {
+		r.write(fmt.Sprintf("! %-14s %-26s %-16s 0 tx\n", e.Module, e.MsgType, e.HandlerFn))
+	}
 }
 
 func (r *CLIReporter) writeFinding(f compare.Finding) {

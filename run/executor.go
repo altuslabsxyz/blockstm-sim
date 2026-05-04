@@ -33,8 +33,18 @@ import (
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/coverage"
 	"github.com/altuslabsxyz/blockstm-sim/instrument"
 )
+
+func init() {
+	coverage.Register("bank-send", coverage.Entry{
+		Key:       "bank-send",
+		Module:    "bank",
+		MsgType:   "MsgSend",
+		HandlerFn: "Send",
+	})
+}
 
 // initApp creates a fresh runtime.App with a new MemDB using the provided
 // depinject config, startup config, and an optional pointer to receive the
@@ -218,6 +228,13 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 
 	e.oracle.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
 	e.probe.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
+
+	if err == nil {
+		result.MsgKeys = make([]string, len(block.Txs))
+		for i, spec := range block.Txs {
+			result.MsgKeys[i] = spec.Msg
+		}
+	}
 
 	return result, err
 }

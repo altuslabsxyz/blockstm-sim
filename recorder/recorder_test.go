@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/coverage"
 )
 
 func testLogger() *log.Logger {
@@ -181,6 +182,47 @@ func TestBlockRecordFromResult_Divergence(t *testing.T) {
 	require.Equal(t, "app_hash", d.Dimension)
 	require.Equal(t, "oracleHash", d.Oracle)
 	require.Equal(t, "probeHash", d.Probe)
+}
+
+func TestBlockRecordFromResult_MsgTypes(t *testing.T) {
+	coverage.Register("bank-send", coverage.Entry{
+		Key:       "bank-send",
+		Module:    "bank",
+		MsgType:   "MsgSend",
+		HandlerFn: "Send",
+	})
+
+	r := &compare.Result{
+		Verdict: compare.Match,
+		Height:  1,
+		MsgKeys: []string{"bank-send", "bank-send", "bank-send"},
+	}
+	br := BlockRecordFromResult(r, "fixture")
+
+	require.Len(t, br.MsgTypes, 1, "duplicate keys should be deduplicated")
+	require.Equal(t, "bank-send", br.MsgTypes[0].Key)
+	require.Equal(t, "bank", br.MsgTypes[0].Module)
+	require.Equal(t, "MsgSend", br.MsgTypes[0].MsgType)
+	require.Equal(t, "Send", br.MsgTypes[0].HandlerFn)
+}
+
+func TestBlockRecordFromResult_MsgTypes_UnknownKey(t *testing.T) {
+	r := &compare.Result{
+		Verdict: compare.Match,
+		Height:  2,
+		MsgKeys: []string{"unknown-msg"},
+	}
+	br := BlockRecordFromResult(r, "fixture")
+
+	require.Len(t, br.MsgTypes, 1)
+	require.Equal(t, "unknown-msg", br.MsgTypes[0].Key)
+	require.Empty(t, br.MsgTypes[0].Module, "unknown key should have empty metadata")
+}
+
+func TestBlockRecordFromResult_MsgTypes_Empty(t *testing.T) {
+	r := &compare.Result{Verdict: compare.Match, Height: 3}
+	br := BlockRecordFromResult(r, "fixture")
+	require.Empty(t, br.MsgTypes)
 }
 
 func TestGenerateRunID_Format(t *testing.T) {

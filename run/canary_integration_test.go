@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
+	"github.com/altuslabsxyz/blockstm-sim/report"
 	"github.com/altuslabsxyz/blockstm-sim/run"
 )
 
@@ -73,7 +74,8 @@ func TestCanaryC1_HarnessE2E(t *testing.T) {
 
 		exec := run.NewFixtureExecutor()
 		out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-		code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, stores, out, errOut)
+		rep := report.NewCLI(out, errOut)
+		code := run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, stores, rep, errOut)
 
 		output := out.String()
 		if strings.Contains(output, "DIVERGENCE canary-01-keeper-map") {
