@@ -9,8 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
-
-	_ "github.com/cosmos/cosmos-sdk/version"
 )
 
 var (
