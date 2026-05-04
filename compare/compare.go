@@ -19,6 +19,7 @@ type Input struct {
 	Block           *abci.RequestFinalizeBlock
 	OracleWriteSets WriteSetProvider
 	ProbeWriteSets  WriteSetProvider
+	OracleMutations MutationProvider
 }
 
 func Run(input Input) (*Result, error) {
@@ -64,6 +65,18 @@ func Run(input Input) (*Result, error) {
 					height, DimWriteSet, i, 0,
 					formatWriteSet(oWS),
 					formatWriteSet(pWS),
+				))
+			}
+		}
+	}
+
+	if input.OracleMutations != nil {
+		for i := 0; i < txCount; i++ {
+			for _, m := range input.OracleMutations.TxMutations(i) {
+				findings = append(findings, NewFinding(
+					height, DimOutOfKVStore, i, 0,
+					fmt.Sprintf("%s:%s", m.Tracker, hex.EncodeToString(m.Before)),
+					fmt.Sprintf("%s:%s", m.Tracker, hex.EncodeToString(m.After)),
 				))
 			}
 		}

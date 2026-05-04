@@ -196,7 +196,7 @@ func TestHarness_CoverageInFooter(t *testing.T) {
 	}}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), out, errOut)
+	run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), report.NewCLI(out, errOut), errOut)
 
 	got := out.String()
 	// "bank-send" is registered by executor.init(); the fixture uses bank-send
@@ -254,7 +254,7 @@ func TestHarness_StateInitializer_Supported(t *testing.T) {
 	}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	code := run.RunHarness(run.Config{CorpusDir: "snap", Probes: 1}, exec, []compare.CorpusStore{store}, out, errOut)
+	code := run.RunHarness(run.Config{CorpusDir: "snap", Probes: 1}, exec, []compare.CorpusStore{store}, report.NewCLI(out, errOut), errOut)
 
 	require.Equal(t, 0, code)
 	require.True(t, exec.initFromStateCalled, "InitFromState should have been called")
@@ -271,7 +271,7 @@ func TestHarness_StateInitializer_NotSupported(t *testing.T) {
 	exec := &mockExecutor{}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	run.RunHarness(run.Config{CorpusDir: "snap", Probes: 1}, exec, []compare.CorpusStore{store}, out, errOut)
+	run.RunHarness(run.Config{CorpusDir: "snap", Probes: 1}, exec, []compare.CorpusStore{store}, report.NewCLI(out, errOut), errOut)
 
 	require.Contains(t, errOut.String(), "executor does not support state-based init")
 	require.True(t, store.closed, "store.Close() should be called even when executor lacks StateInitializer")
@@ -285,7 +285,7 @@ func TestHarness_StateInitializer_InitError(t *testing.T) {
 	exec := &mockStateExecutor{initFromStateErr: errors.New("state load failed")}
 
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
-	run.RunHarness(run.Config{CorpusDir: "snap", Probes: 1}, exec, []compare.CorpusStore{store}, out, errOut)
+	run.RunHarness(run.Config{CorpusDir: "snap", Probes: 1}, exec, []compare.CorpusStore{store}, report.NewCLI(out, errOut), errOut)
 
 	require.Contains(t, errOut.String(), "state load failed")
 	require.True(t, store.closed, "store.Close() should be called even when InitFromState fails")

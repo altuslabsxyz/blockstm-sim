@@ -58,9 +58,10 @@ type ModuleInputs struct {
 type ModuleOutputs struct {
 	depinject.Out
 	Module appmodule.AppModule
+	Keeper *keeper.Keeper
 }
 
 func ProvideModule(in ModuleInputs) ModuleOutputs {
 	k := keeper.NewKeeper(in.StoreService)
-	return ModuleOutputs{Module: NewAppModule(k)}
+	return ModuleOutputs{Module: NewAppModule(k), Keeper: k}
 }

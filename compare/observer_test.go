@@ -74,3 +74,64 @@ func TestBlockObserver_OutOfBounds(t *testing.T) {
 	obs.OnTxStart(99)
 	require.Nil(t, obs.TxWriteSet(99))
 }
+
+// --- Mutation tracking tests ---
+
+func TestBlockObserver_MutationTracking_DetectChange(t *testing.T) {
+	tracker := &fakeTracker{name: "test.field", state: []byte("initial")}
+	obs := compare.NewBlockObserver(2, tracker)
+
+	obs.OnTxStart(0)
+	tracker.state = []byte("mutated")
+	obs.OnTxEnd(0, nil)
+
+	muts := obs.TxMutations(0)
+	require.Len(t, muts, 1)
+	require.Equal(t, "test.field", muts[0].Tracker)
+	require.Equal(t, []byte("initial"), muts[0].Before)
+	require.Equal(t, []byte("mutated"), muts[0].After)
+}
+
+func TestBlockObserver_MutationTracking_NoChange(t *testing.T) {
+	tracker := &fakeTracker{name: "test.field", state: []byte("same")}
+	obs := compare.NewBlockObserver(2, tracker)
+
+	obs.OnTxStart(0)
+	// No mutation
+	obs.OnTxEnd(0, nil)
+
+	require.Nil(t, obs.TxMutations(0))
+}
+
+func TestBlockObserver_MutationTracking_MultiTx(t *testing.T) {
+	tracker := &fakeTracker{name: "test.field", state: []byte("")}
+	obs := compare.NewBlockObserver(3, tracker)
+
+	obs.OnTxStart(0)
+	tracker.state = []byte("a")
+	obs.OnTxEnd(0, nil)
+
+	obs.OnTxStart(1)
+	tracker.state = []byte("ab")
+	obs.OnTxEnd(1, nil)
+
+	obs.OnTxStart(2)
+	obs.OnTxEnd(2, nil)
+
+	require.Len(t, obs.TxMutations(0), 1)
+	require.Equal(t, []byte(""), obs.TxMutations(0)[0].Before)
+	require.Equal(t, []byte("a"), obs.TxMutations(0)[0].After)
+
+	require.Len(t, obs.TxMutations(1), 1)
+	require.Equal(t, []byte("a"), obs.TxMutations(1)[0].Before)
+	require.Equal(t, []byte("ab"), obs.TxMutations(1)[0].After)
+
+	require.Nil(t, obs.TxMutations(2))
+}
+
+func TestBlockObserver_NoTrackers_BackwardCompat(t *testing.T) {
+	obs := compare.NewBlockObserver(2)
+	obs.OnTxStart(0)
+	obs.OnTxEnd(0, nil)
+	require.Nil(t, obs.TxMutations(0))
+}

@@ -47,7 +47,13 @@ jobs:
 
       - name: Build simharness+canary binary
         working-directory: blockstm-sim
-        run: make build-canary
+        env:
+          GONOSUMDB: "github.com/stablelabs/*"
+          GOPRIVATE: "github.com/stablelabs/*"
+          STABLE_SDK_TOKEN: ${{ secrets.STABLE_SDK_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${STABLE_SDK_TOKEN}@github.com/stablelabs/".insteadOf "https://github.com/stablelabs/"
+          make build-canary
 
       - name: Run simulation corpus
         id: sim
