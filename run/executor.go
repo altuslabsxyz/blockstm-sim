@@ -159,13 +159,12 @@ type FixtureExecutor struct {
 	keys          map[string]cryptotypes.PrivKey
 	accountNums   map[string]uint64
 	sequences     map[string]uint64
-	oracleWorkers int // 0 = RunnerSequential; >0 = BlockSTM with N workers
+	oracleWorkers int // 0 = 1-worker BlockSTM (deterministic); >0 = BlockSTM with N workers
 }
 
-// WithSTMOracle configures the oracle to use BlockSTM with the given worker
-// count instead of the default sequential runner. Use this when lifecycle
-// callbacks (OnTxStart/OnTxEnd) are required — e.g. for F4 out-of-KVStore
-// mutation detection. The sequential runner does not fire those callbacks.
+// WithSTMOracle configures the oracle to use BlockSTM with more than one worker.
+// The default is already 1-worker BlockSTM; this override is for cases where
+// multi-worker parallelism in the oracle is explicitly desired.
 func WithSTMOracle(workers int) func(*FixtureExecutor) {
 	return func(e *FixtureExecutor) { e.oracleWorkers = workers }
 }
@@ -196,10 +195,12 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	if err != nil {
 		return fmt.Errorf("setup oracle app: %w", err)
 	}
-	if e.oracleWorkers > 0 {
-		instrument.InstrumentSTM(oracleApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), nil, e.oracleWorkers, false, nil))
-	} else {
-		instrument.InstrumentApp(oracleApp, instrument.Options{Runner: instrument.RunnerSequential})
+	{
+		workers := e.oracleWorkers
+		if workers == 0 {
+			workers = 1
+		}
+		instrument.InstrumentSTM(oracleApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), nil, workers, false, nil))
 	}
 
 	probeApp, err := initApp(cfg, gs.baseCfg, nil)
