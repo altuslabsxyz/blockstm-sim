@@ -214,6 +214,20 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	return nil
 }
 
+// blockMutFinalizer wraps a Finalizer so that CaptureAfterBlock is called on
+// the observer immediately after FinalizeBlock returns, enabling block-level
+// out-of-KVStore mutation detection without relying on OnTxStart/OnTxEnd hooks.
+type blockMutFinalizer struct {
+	inner compare.Finalizer
+	obs   *compare.BlockObserver
+}
+
+func (f *blockMutFinalizer) FinalizeBlock(req *abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error) {
+	res, err := f.inner.FinalizeBlock(req)
+	f.obs.CaptureAfterBlock()
+	return res, err
+}
+
 func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*compare.Result, error) {
 	var txs [][]byte
 	for _, spec := range block.Txs {
@@ -242,8 +256,12 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 	e.oracle.SetLifecycleObserver(oracleObs)
 	e.probe.SetLifecycleObserver(probeObs)
 
+	// Snapshot out-of-KVStore state before execution so CaptureAfterBlock can
+	// diff against it. This is a no-op when there are no trackers.
+	oracleObs.CaptureBeforeBlock()
+
 	result, err := compare.Run(compare.Input{
-		Oracle: e.oracle,
+		Oracle: &blockMutFinalizer{inner: e.oracle, obs: oracleObs},
 		Probe:  e.probe,
 		Block: &abci.RequestFinalizeBlock{
 			Height: height,

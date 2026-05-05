@@ -19,8 +19,10 @@ import (
 // calls from BlockSTM goroutines are safe without a mutex as long as each
 // goroutine writes to a distinct txIndex.
 //
-// Mutation tracking: designed for the oracle (sequential) runner only. Snapshots
-// registered MutationTrackers at OnTxStart and diffs at OnTxEnd.
+// Mutation tracking: uses block-level capture via CaptureBeforeBlock /
+// CaptureAfterBlock. The caller snapshots state before oracle FinalizeBlock and
+// diffs after; the delta is attributed to TxIndex=0. This avoids dependence on
+// OnTxStart/OnTxEnd, which are not guaranteed to fire in all SDK runners.
 type BlockObserver struct {
 	lifecycle.NoopLifecycleObserver
 	writeSets []map[string]struct{}
@@ -120,4 +122,35 @@ func (o *BlockObserver) TxMutations(txIndex int) []MutationRecord {
 		return nil
 	}
 	return o.mutSets[txIndex]
+}
+
+// CaptureBeforeBlock snapshots all tracker states into the tx-0 slot. Call
+// this immediately before the oracle FinalizeBlock to establish a baseline.
+func (o *BlockObserver) CaptureBeforeBlock() {
+	if len(o.trackers) == 0 || len(o.snapshots) == 0 {
+		return
+	}
+	for i, t := range o.trackers {
+		o.snapshots[0][i] = t.SnapshotOutOfKVStoreState()
+	}
+}
+
+// CaptureAfterBlock diffs current tracker states against the tx-0 pre-block
+// baseline and appends any changes to mutSets[0]. Call this immediately after
+// oracle FinalizeBlock returns.
+func (o *BlockObserver) CaptureAfterBlock() {
+	if len(o.trackers) == 0 || len(o.mutSets) == 0 || len(o.snapshots) == 0 {
+		return
+	}
+	for i, t := range o.trackers {
+		after := t.SnapshotOutOfKVStoreState()
+		before := o.snapshots[0][i]
+		if !bytes.Equal(before, after) {
+			o.mutSets[0] = append(o.mutSets[0], MutationRecord{
+				Tracker: t.TrackerName(),
+				Before:  before,
+				After:   after,
+			})
+		}
+	}
 }

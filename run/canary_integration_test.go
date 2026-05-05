@@ -100,10 +100,7 @@ func TestCanaryF4_OutOfKVStoreMutationDetected(t *testing.T) {
 	fixture, err := compare.LoadFixture("../corpus/fixtures", "canary-01-keeper-map.yaml")
 	require.NoError(t, err)
 
-	// WithSTMOracle enables lifecycle callbacks (OnTxStart/OnTxEnd) which are
-	// required for F4 out-of-KVStore mutation detection. The default sequential
-	// runner does not fire those callbacks.
-	exec := run.NewFixtureExecutor(run.WithSTMOracle(4))
+	exec := run.NewFixtureExecutor()
 	require.NoError(t, exec.Init(fixture.Genesis))
 	defer exec.Close()
 
