@@ -34,6 +34,21 @@ func init() {
 
 	extraOracleOutputs = append(extraOracleOutputs, &oracleCanaryKeeper)
 
+	// Reset oracleCanaryKeeper before each oracle app setup so OnKeeperCreated
+	// picks up the new oracle's keeper rather than a stale one from a prior run.
+	extraPreOracleSetup = func() {
+		oracleCanaryKeeper = nil
+	}
+
+	// OnKeeperCreated fires inside NewKeeper — earlier than depinject output
+	// injection — giving us a reliable registration path that works even when
+	// SetupWithConfiguration doesn't propagate the **Keeper output.
+	simcanarykeeper.OnKeeperCreated = func(k *simcanarykeeper.Keeper) {
+		if oracleCanaryKeeper == nil {
+			oracleCanaryKeeper = k
+		}
+	}
+
 	extraOracleMutTrackers = func() []compare.MutationTracker {
 		if oracleCanaryKeeper == nil {
 			return nil

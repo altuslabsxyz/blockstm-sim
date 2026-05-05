@@ -30,11 +30,20 @@ type Keeper struct {
 	blockCtxWriter BlockContextWriter
 }
 
+// OnKeeperCreated, if non-nil, is called whenever a new Keeper is constructed.
+// The run package sets this to register the oracle's keeper for F4 mutation tracking,
+// bypassing depinject output injection which may not be supported by all SDK builds.
+var OnKeeperCreated func(*Keeper)
+
 func NewKeeper(ss store.KVStoreService) *Keeper {
-	return &Keeper{
+	k := &Keeper{
 		storeService: ss,
 		sharedMap:    make(map[string]int64),
 	}
+	if OnKeeperCreated != nil {
+		OnKeeperCreated(k)
+	}
+	return k
 }
 
 func (k *Keeper) SetMapValue(key string, value int64) {

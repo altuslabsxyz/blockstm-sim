@@ -131,6 +131,7 @@ var (
 	extraOracleOutputs         []any
 	extraOracleMutTrackers     func() []compare.MutationTracker
 	extraOracleBlockCtxTracker func(height int64) *compare.BlockContextTracker
+	extraPreOracleSetup        func()
 )
 
 func buildAppConfig() depinject.Config {
@@ -187,6 +188,9 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 
 	cfg := buildAppConfig()
 	gs.baseCfg.DB = dbm.NewMemDB()
+	if extraPreOracleSetup != nil {
+		extraPreOracleSetup()
+	}
 	oracleOutputs := append([]any{&txCfg}, extraOracleOutputs...)
 	oracleApp, err := simtestutil.SetupWithConfiguration(cfg, gs.baseCfg, oracleOutputs...)
 	if err != nil {
