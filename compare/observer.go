@@ -1,5 +1,3 @@
-//go:build sdk_hooks
-
 package compare
 
 import (
@@ -8,8 +6,6 @@ import (
 	"sort"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-
-	"github.com/cosmos/cosmos-sdk/baseapp/lifecycle"
 )
 
 // BlockObserver implements lifecycle.LifecycleObserver to capture per-transaction
@@ -31,7 +27,7 @@ import (
 // blockSnapshots is a dedicated field that OnTxStart cannot touch, ensuring
 // CaptureBeforeBlock's baseline survives the post-hoc callback loop.
 type BlockObserver struct {
-	lifecycle.NoopLifecycleObserver
+	NoopLifecycleObserver
 	writeSets []map[string]struct{}
 
 	trackers       []MutationTracker
@@ -41,7 +37,7 @@ type BlockObserver struct {
 	txSetters      []TxIndexSetter
 }
 
-var _ lifecycle.LifecycleObserver = (*BlockObserver)(nil)
+var _ LifecycleObserver = (*BlockObserver)(nil)
 var _ WriteSetProvider = (*BlockObserver)(nil)
 var _ MutationProvider = (*BlockObserver)(nil)
 
