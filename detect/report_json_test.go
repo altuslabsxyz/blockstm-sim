@@ -11,13 +11,13 @@ import (
 func TestDetectJSONReporter_SchemaVersion(t *testing.T) {
 	var buf bytes.Buffer
 	r := NewJSONReporter(&buf)
-	r.Header("../stable-sdk")
-	r.Footer(&ScanResult{Files: 10}, "../stable-sdk")
+	r.Header("../cosmos-sdk")
+	r.Footer(&ScanResult{Files: 10}, "../cosmos-sdk")
 
 	var doc map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &doc))
 	require.Equal(t, float64(1), doc["schema_version"])
-	require.Equal(t, "../stable-sdk", doc["sdk_path"])
+	require.Equal(t, "../cosmos-sdk", doc["sdk_path"])
 }
 
 func TestDetectJSONReporter_FindingFields(t *testing.T) {

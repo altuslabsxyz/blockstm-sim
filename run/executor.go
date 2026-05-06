@@ -1,6 +1,9 @@
+//go:build sdk_hooks
+
 package run
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -33,18 +36,8 @@ import (
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
-	"github.com/altuslabsxyz/blockstm-sim/coverage"
 	"github.com/altuslabsxyz/blockstm-sim/instrument"
 )
-
-func init() {
-	coverage.Register("bank-send", coverage.Entry{
-		Key:       "bank-send",
-		Module:    "bank",
-		MsgType:   "MsgSend",
-		HandlerFn: "Send",
-	})
-}
 
 // initApp creates a fresh runtime.App with a new MemDB using the provided
 // depinject config, startup config, and an optional pointer to receive the
@@ -139,6 +132,18 @@ var (
 	extraOracleOutputs         []any
 	extraOracleMutTrackers     func() []compare.MutationTracker
 	extraOracleBlockCtxTracker func(height int64) *compare.BlockContextTracker
+	extraPreOracleSetup        func()
+	// extraPopulateOracleTrackers is called after oracle app setup in Init to
+	// populate the executor's oracleTrackers field from any registered keepers.
+	extraPopulateOracleTrackers func(*FixtureExecutor)
+	// extraPreProbeSetup is called inside PostOracleHook (between oracle and
+	// probe FinalizeBlock) to configure any probe-specific state before the
+	// probe executes. Use this to enable race-widening delays that must NOT
+	// affect oracle execution.
+	extraPreProbeSetup func()
+	// extraPostRunBlockHook is called after compare.Run returns in RunBlock to
+	// clean up any block-scoped state set by extraPreProbeSetup.
+	extraPostRunBlockHook func()
 )
 
 func buildAppConfig() depinject.Config {
@@ -160,16 +165,31 @@ func buildAppConfig() depinject.Config {
 }
 
 type FixtureExecutor struct {
-	oracle      *runtime.App
-	probe       *runtime.App
-	txConfig    client.TxConfig
-	keys        map[string]cryptotypes.PrivKey
-	accountNums map[string]uint64
-	sequences   map[string]uint64
+	oracle        *runtime.App
+	probe         *runtime.App
+	txConfig      client.TxConfig
+	keys          map[string]cryptotypes.PrivKey
+	accountNums   map[string]uint64
+	sequences     map[string]uint64
+	oracleWorkers int // 0 = 1-worker BlockSTM (deterministic); >0 = BlockSTM with N workers
+	// oracleTrackers holds the out-of-KVStore mutation trackers for the oracle app.
+	// Populated by extraPopulateOracleTrackers after oracle setup in Init.
+	oracleTrackers []compare.MutationTracker
 }
 
-func NewFixtureExecutor() *FixtureExecutor {
-	return &FixtureExecutor{}
+// WithSTMOracle configures the oracle to use BlockSTM with more than one worker.
+// The default is already 1-worker BlockSTM; this override is for cases where
+// multi-worker parallelism in the oracle is explicitly desired.
+func WithSTMOracle(workers int) func(*FixtureExecutor) {
+	return func(e *FixtureExecutor) { e.oracleWorkers = workers }
+}
+
+func NewFixtureExecutor(opts ...func(*FixtureExecutor)) *FixtureExecutor {
+	fe := &FixtureExecutor{}
+	for _, o := range opts {
+		o(fe)
+	}
+	return fe
 }
 
 func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
@@ -182,18 +202,31 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 
 	cfg := buildAppConfig()
 	gs.baseCfg.DB = dbm.NewMemDB()
+	if extraPreOracleSetup != nil {
+		extraPreOracleSetup()
+	}
 	oracleOutputs := append([]any{&txCfg}, extraOracleOutputs...)
 	oracleApp, err := simtestutil.SetupWithConfiguration(cfg, gs.baseCfg, oracleOutputs...)
 	if err != nil {
 		return fmt.Errorf("setup oracle app: %w", err)
 	}
-	instrument.InstrumentApp(oracleApp, instrument.Options{Runner: instrument.RunnerSequential})
+	{
+		workers := e.oracleWorkers
+		if workers == 0 {
+			workers = 1
+		}
+		instrument.InstrumentSTM(oracleApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), oracleApp.GetStoreKeys(), workers, false, nil))
+	}
+
+	if extraPopulateOracleTrackers != nil {
+		extraPopulateOracleTrackers(e)
+	}
 
 	probeApp, err := initApp(cfg, gs.baseCfg, nil)
 	if err != nil {
 		return fmt.Errorf("setup probe app: %w", err)
 	}
-	instrument.InstrumentSTM(probeApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), nil, 4, false, nil))
+	instrument.InstrumentSTM(probeApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), probeApp.GetStoreKeys(), 4, false, nil, txnrunner.WithPerturbHook(rand.Int63())))
 
 	e.oracle = oracleApp
 	e.probe = probeApp
@@ -220,12 +253,20 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		blockCtxTracker = extraOracleBlockCtxTracker(height)
 	}
 
-	oracleTrackers := []compare.MutationTracker{}
-	if extraOracleMutTrackers != nil {
-		oracleTrackers = extraOracleMutTrackers()
-	}
+	// Build the tracker list for this block: executor-level oracle trackers plus
+	// the per-block context tracker (if any). This list is captured by the
+	// PostOracleHook closure for direct snapshot diffing.
+	oracleTrackers := append([]compare.MutationTracker(nil), e.oracleTrackers...)
 	if blockCtxTracker != nil {
 		oracleTrackers = append(oracleTrackers, blockCtxTracker)
+	}
+
+	// Snapshot each tracker's out-of-KVStore state before oracle execution so
+	// the PostOracleHook closure can diff against it. This does not go through
+	// the observer lifecycle callbacks, avoiding post-hoc OnTxStart races.
+	oraclePreSnaps := make([][]byte, len(oracleTrackers))
+	for i, t := range oracleTrackers {
+		oraclePreSnaps[i] = t.SnapshotOutOfKVStoreState()
 	}
 
 	oracleObs := compare.NewBlockObserver(len(txs), oracleTrackers...)
@@ -244,10 +285,29 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		ProbeWriteSets:        probeObs,
 		OracleMutations:       oracleObs,
 		BlockContextMutations: blockCtxTracker,
+		PostOracleHook: func() {
+			if extraPreProbeSetup != nil {
+				extraPreProbeSetup()
+			}
+			for i, t := range oracleTrackers {
+				after := t.SnapshotOutOfKVStoreState()
+				if !bytes.Equal(oraclePreSnaps[i], after) {
+					oracleObs.AddBlockMutation(compare.MutationRecord{
+						Tracker: t.TrackerName(),
+						Before:  oraclePreSnaps[i],
+						After:   after,
+					})
+				}
+			}
+		},
 	})
 
 	e.oracle.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
 	e.probe.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
+
+	if extraPostRunBlockHook != nil {
+		extraPostRunBlockHook()
+	}
 
 	if err == nil {
 		result.MsgKeys = make([]string, len(block.Txs))
@@ -266,6 +326,7 @@ func (e *FixtureExecutor) Close() {
 	e.keys = nil
 	e.accountNums = nil
 	e.sequences = nil
+	e.oracleTrackers = nil
 }
 
 // buildTx is a convenience method on FixtureExecutor that delegates to the

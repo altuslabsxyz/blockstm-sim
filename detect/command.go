@@ -72,7 +72,7 @@ func NewCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("sdk-path", "../stable-sdk", "Path to SDK source tree")
+	cmd.Flags().String("sdk-path", "../cosmos-sdk", "Path to SDK source tree")
 	cmd.Flags().String("category", "", "Filter to a single category: time, rand, or io")
 	cmd.Flags().String("format", "text", "Output format: text, json, or markdown")
 

@@ -1,3 +1,5 @@
+//go:build sdk_hooks
+
 package run
 
 import (
@@ -64,7 +66,7 @@ func (e *RepeatRunExecutor) Init(genesis compare.GenesisSpec) error {
 		if err != nil {
 			return fmt.Errorf("setup probe app %d: %w", i, err)
 		}
-		instrument.InstrumentSTM(probeApp, newSTMRunnerForProbe(pcfg, txCfg.TxDecoder()))
+		instrument.InstrumentSTM(probeApp, newSTMRunnerForProbe(pcfg, txCfg.TxDecoder(), probeApp.GetStoreKeys()))
 		probes[i] = probeApp
 	}
 
@@ -224,4 +226,3 @@ func repeatCompareResponses(
 
 	return findings
 }
-

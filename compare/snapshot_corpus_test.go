@@ -49,7 +49,7 @@ func TestSnapshotCorpus_Iter(t *testing.T) {
 		12: makeStubBlock(12),
 	}
 	sc := newTestCorpus(meta, blocks)
-	defer sc.Close()
+	defer func() { _ = sc.Close() }()
 
 	var got []compare.Block
 	for block, err := range sc.Iter(context.Background()) {
@@ -73,7 +73,7 @@ func TestSnapshotCorpus_IterCancel(t *testing.T) {
 		2: makeStubBlock(2, []byte("tx")),
 	}
 	sc := newTestCorpus(meta, blocks)
-	defer sc.Close()
+	defer func() { _ = sc.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -100,7 +100,7 @@ func TestSnapshotCorpus_MissingBlock(t *testing.T) {
 		// height 2 is intentionally absent
 	}
 	sc := newTestCorpus(meta, blocks)
-	defer sc.Close()
+	defer func() { _ = sc.Close() }()
 
 	var iterErr error
 	for _, err := range sc.Iter(context.Background()) {
@@ -122,7 +122,7 @@ func TestSnapshotCorpus_Metadata(t *testing.T) {
 		BondDenom:  "uatom",
 	}
 	sc := newTestCorpus(meta, nil)
-	defer sc.Close()
+	defer func() { _ = sc.Close() }()
 
 	require.Equal(t, "cosmoshub-4", sc.Name())
 	require.Equal(t, "uatom", sc.BondDenom())

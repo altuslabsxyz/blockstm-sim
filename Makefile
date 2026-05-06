@@ -16,16 +16,16 @@ build:
 	go build $(BUILD_FLAGS) -o build/blockstm-sim ./cmd/blockstm-sim
 
 build-simharness:
-	$(MAKE) build BUILD_TAGS=simharness
+	$(MAKE) build BUILD_TAGS="sdk_hooks simharness"
 
 build-canary:
-	$(MAKE) build BUILD_TAGS="simharness simharness_canary"
+	$(MAKE) build BUILD_TAGS="sdk_hooks simharness simharness_canary"
 
 test:
 	go test ./...
 
 test-canary:
-	go test -tags "simharness simharness_canary" -v -count=1 ./...
+	go test -tags "sdk_hooks simharness simharness_canary" -v -count=1 ./...
 
 lint:
 	golangci-lint run ./...

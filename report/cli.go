@@ -107,7 +107,7 @@ func (r *CLIReporter) writeFinding(f compare.Finding) {
 func (r *CLIReporter) write(s string) {
 	if _, err := io.WriteString(r.out, s); err != nil {
 		r.errs++
-		fmt.Fprintf(r.errw, "reporter: write error: %v\n", err)
+		_, _ = fmt.Fprintf(r.errw, "reporter: write error: %v\n", err)
 	}
 }
 

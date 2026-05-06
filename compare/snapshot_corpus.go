@@ -70,8 +70,8 @@ func (sc *SnapshotCorpus) Iter(ctx context.Context) iter.Seq2[Block, error] {
 				yield(Block{}, fmt.Errorf("block %d not found in blockstore", h))
 				return
 			}
-			rawTxs := make([][]byte, len(cmtBlock.Data.Txs))
-			for i, tx := range cmtBlock.Data.Txs {
+			rawTxs := make([][]byte, len(cmtBlock.Txs))
+			for i, tx := range cmtBlock.Txs {
 				rawTxs[i] = []byte(tx)
 			}
 			if !yield(Block{Height: h, RawTxs: rawTxs}, nil) {

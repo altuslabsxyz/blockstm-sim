@@ -1,3 +1,5 @@
+//go:build sdk_hooks
+
 package instrument_test
 
 import (

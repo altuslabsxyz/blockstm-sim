@@ -1,3 +1,5 @@
+//go:build sdk_hooks
+
 package run
 
 import (

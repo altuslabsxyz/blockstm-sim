@@ -21,12 +21,19 @@ type Input struct {
 	ProbeWriteSets        WriteSetProvider
 	OracleMutations       MutationProvider
 	BlockContextMutations BlockContextMutationProvider
+	// PostOracleHook is called immediately after oracle FinalizeBlock succeeds,
+	// before the probe runs. Use this to capture oracle-side state that must be
+	// snapshotted after oracle execution but before any further state changes.
+	PostOracleHook func()
 }
 
 func Run(input Input) (*Result, error) {
 	oracleRes, err := input.Oracle.FinalizeBlock(input.Block)
 	if err != nil {
 		return nil, fmt.Errorf("oracle FinalizeBlock: %w", err)
+	}
+	if input.PostOracleHook != nil {
+		input.PostOracleHook()
 	}
 
 	probeRes, err := input.Probe.FinalizeBlock(input.Block)
@@ -72,7 +79,10 @@ func Run(input Input) (*Result, error) {
 	}
 
 	if input.OracleMutations != nil {
-		for i := 0; i < txCount; i++ {
+		// Use the larger of txCount and len(Block.Txs) so that block-level
+		// mutations (stored at txIndex=0) are always read, even when a runner
+		// returns fewer TxResults than the number of submitted transactions.
+		for i := 0; i < max(txCount, len(input.Block.Txs)); i++ {
 			for _, m := range input.OracleMutations.TxMutations(i) {
 				findings = append(findings, NewFinding(
 					height, DimOutOfKVStore, i, 0,

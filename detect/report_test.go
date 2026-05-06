@@ -10,9 +10,9 @@ import (
 func TestReportHeader(t *testing.T) {
 	var buf bytes.Buffer
 	r := NewReporter(&buf)
-	r.Header("../stable-sdk")
+	r.Header("../cosmos-sdk")
 
-	require.Equal(t, "Detect  sdk-path=../stable-sdk\n\n", buf.String())
+	require.Equal(t, "Detect  sdk-path=../cosmos-sdk\n\n", buf.String())
 }
 
 func TestReportFinding(t *testing.T) {
@@ -41,17 +41,17 @@ func TestReportFooter(t *testing.T) {
 			{Category: CatIO},
 		},
 		Files: 142,
-	}, "../stable-sdk")
+	}, "../cosmos-sdk")
 
-	want := "\nSummary\n  3 findings / 1 time / 1 rand / 1 io\n  Scanned 142 files in ../stable-sdk\n"
+	want := "\nSummary\n  3 findings / 1 time / 1 rand / 1 io\n  Scanned 142 files in ../cosmos-sdk\n"
 	require.Equal(t, want, buf.String())
 }
 
 func TestReportFooter_Empty(t *testing.T) {
 	var buf bytes.Buffer
 	r := NewReporter(&buf)
-	r.Footer(&ScanResult{Files: 50}, "../stable-sdk")
+	r.Footer(&ScanResult{Files: 50}, "../cosmos-sdk")
 
-	want := "\nSummary\n  0 findings / 0 time / 0 rand / 0 io\n  Scanned 50 files in ../stable-sdk\n"
+	want := "\nSummary\n  0 findings / 0 time / 0 rand / 0 io\n  Scanned 50 files in ../cosmos-sdk\n"
 	require.Equal(t, want, buf.String())
 }

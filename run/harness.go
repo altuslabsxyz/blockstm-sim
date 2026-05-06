@@ -20,7 +20,7 @@ type Executor interface {
 
 // StateInitializer is an optional interface for executors that can initialise
 // from an existing multistore rather than from a genesis spec.
-// Requires stable-sdk PR-3b (CacheMultiStoreWithVersion) to be merged.
+// Requires SDK hook support for versioned multistore snapshots.
 type StateInitializer interface {
 	InitFromState(preStateDB dbm.DB) error
 }
@@ -58,21 +58,21 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 		if preStateDB := store.PreStateDB(); preStateDB != nil {
 			si, ok := exec.(StateInitializer)
 			if !ok {
-				fmt.Fprintf(errOut, "executor does not support state-based init for %s\n", name)
-				store.Close()
+				_, _ = fmt.Fprintf(errOut, "executor does not support state-based init for %s\n", name)
+				_ = store.Close()
 				blockNum += store.BlockCount()
 				continue
 			}
 			if err := si.InitFromState(preStateDB); err != nil {
-				fmt.Fprintf(errOut, "init from state %s: %v\n", name, err)
-				store.Close()
+				_, _ = fmt.Fprintf(errOut, "init from state %s: %v\n", name, err)
+				_ = store.Close()
 				blockNum += store.BlockCount()
 				continue
 			}
 		} else {
 			if err := exec.Init(store.Genesis()); err != nil {
-				fmt.Fprintf(errOut, "init fixture %s: %v\n", name, err)
-				store.Close()
+				_, _ = fmt.Fprintf(errOut, "init fixture %s: %v\n", name, err)
+				_ = store.Close()
 				blockNum += store.BlockCount()
 				continue
 			}
@@ -81,7 +81,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 		var localHeight int64
 		for block, err := range store.Iter(ctx) {
 			if err != nil {
-				fmt.Fprintf(errOut, "iter fixture %s: %v\n", name, err)
+				_, _ = fmt.Fprintf(errOut, "iter fixture %s: %v\n", name, err)
 				break
 			}
 			localHeight++
@@ -93,7 +93,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 
 			result, err := exec.RunBlock(block, effectiveHeight)
 			if err != nil {
-				fmt.Fprintf(errOut, "run block %d of %s: %v\n", effectiveHeight, name, err)
+				_, _ = fmt.Fprintf(errOut, "run block %d of %s: %v\n", effectiveHeight, name, err)
 				continue
 			}
 
@@ -121,7 +121,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 			}
 		}
 
-		store.Close()
+		_ = store.Close()
 		exec.Close()
 	}
 

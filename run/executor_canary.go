@@ -1,9 +1,10 @@
-//go:build simharness_canary
+//go:build sdk_hooks && simharness_canary
 
 package run
 
 import (
 	"fmt"
+	"time"
 
 	appv1alpha1 "cosmossdk.io/api/cosmos/app/v1alpha1"
 	"cosmossdk.io/core/appconfig"
@@ -34,11 +35,46 @@ func init() {
 
 	extraOracleOutputs = append(extraOracleOutputs, &oracleCanaryKeeper)
 
+	// Reset oracleCanaryKeeper before each oracle app setup so OnKeeperCreated
+	// picks up the new oracle's keeper rather than a stale one from a prior run.
+	extraPreOracleSetup = func() {
+		oracleCanaryKeeper = nil
+	}
+
+	// OnKeeperCreated fires inside NewKeeper, before depinject output injection.
+	// Always overwrite so the last-constructed (live) keeper is captured, even
+	// if depinject constructs the module more than once.
+	simcanarykeeper.OnKeeperCreated = func(k *simcanarykeeper.Keeper) {
+		oracleCanaryKeeper = k
+	}
+
+	// extraOracleMutTrackers is kept for backward compatibility but RunBlock
+	// now uses e.oracleTrackers (populated by extraPopulateOracleTrackers below).
 	extraOracleMutTrackers = func() []compare.MutationTracker {
 		if oracleCanaryKeeper == nil {
 			return nil
 		}
 		return []compare.MutationTracker{oracleCanaryKeeper}
+	}
+
+	// extraPopulateOracleTrackers captures the oracle's keeper into the executor
+	// immediately after oracle app setup, before the probe app is created.
+	// This ensures RunBlock's direct snapshot-diffing uses the correct keeper
+	// instance even if the package-level oracleCanaryKeeper is later cleared.
+	extraPopulateOracleTrackers = func(e *FixtureExecutor) {
+		if oracleCanaryKeeper != nil {
+			e.oracleTrackers = []compare.MutationTracker{oracleCanaryKeeper}
+		}
+	}
+
+	// Enable SetValueDelay only for the probe (between oracle and probe FinalizeBlock)
+	// so the oracle runs without the sleep and its sharedMap snapshot is clean.
+	// Reset after compare.Run so the next attempt starts fresh.
+	extraPreProbeSetup = func() {
+		simcanarykeeper.SetValueDelay = 50 * time.Millisecond
+	}
+	extraPostRunBlockHook = func() {
+		simcanarykeeper.SetValueDelay = 0
 	}
 
 	extraOracleBlockCtxTracker = func(height int64) *compare.BlockContextTracker {
