@@ -9,7 +9,6 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 
-	"github.com/cosmos/cosmos-sdk/baseapp/lifecycle"
 	"github.com/cosmos/cosmos-sdk/client"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
@@ -169,9 +168,9 @@ func (e *RepeatRunExecutor) Close() {
 
 // unsetObservers resets lifecycle observers on all apps to the noop observer.
 func (e *RepeatRunExecutor) unsetObservers() {
-	e.oracle.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
+	e.oracle.SetLifecycleObserver(compare.NoopLifecycleObserver{})
 	for _, p := range e.probes {
-		p.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
+		p.SetLifecycleObserver(compare.NoopLifecycleObserver{})
 	}
 }
 

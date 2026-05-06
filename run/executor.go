@@ -16,7 +16,6 @@ import (
 	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
 
-	"github.com/cosmos/cosmos-sdk/baseapp/lifecycle"
 	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/client"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -302,8 +301,8 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		},
 	})
 
-	e.oracle.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
-	e.probe.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
+	e.oracle.SetLifecycleObserver(compare.NoopLifecycleObserver{})
+	e.probe.SetLifecycleObserver(compare.NoopLifecycleObserver{})
 
 	if extraPostRunBlockHook != nil {
 		extraPostRunBlockHook()
