@@ -136,6 +136,14 @@ var (
 	// extraPopulateOracleTrackers is called after oracle app setup in Init to
 	// populate the executor's oracleTrackers field from any registered keepers.
 	extraPopulateOracleTrackers func(*FixtureExecutor)
+	// extraPreProbeSetup is called inside PostOracleHook (between oracle and
+	// probe FinalizeBlock) to configure any probe-specific state before the
+	// probe executes. Use this to enable race-widening delays that must NOT
+	// affect oracle execution.
+	extraPreProbeSetup func()
+	// extraPostRunBlockHook is called after compare.Run returns in RunBlock to
+	// clean up any block-scoped state set by extraPreProbeSetup.
+	extraPostRunBlockHook func()
 )
 
 func buildAppConfig() depinject.Config {
@@ -278,6 +286,9 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		OracleMutations:       oracleObs,
 		BlockContextMutations: blockCtxTracker,
 		PostOracleHook: func() {
+			if extraPreProbeSetup != nil {
+				extraPreProbeSetup()
+			}
 			for i, t := range oracleTrackers {
 				after := t.SnapshotOutOfKVStoreState()
 				if !bytes.Equal(oraclePreSnaps[i], after) {
@@ -293,6 +304,10 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 
 	e.oracle.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
 	e.probe.SetLifecycleObserver(lifecycle.NoopLifecycleObserver{})
+
+	if extraPostRunBlockHook != nil {
+		extraPostRunBlockHook()
+	}
 
 	if err == nil {
 		result.MsgKeys = make([]string, len(block.Txs))

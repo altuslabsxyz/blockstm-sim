@@ -26,11 +26,6 @@ var oracleCanaryKeeper *simcanarykeeper.Keeper
 var oracleBlockCtxTracker = compare.NewBlockContextTracker(nil)
 
 func init() {
-	// Widen the race window for C1 canary detection: TX0 (MapSet) sleeps before
-	// acquiring the mutex, giving TX1 (MapReadAndWrite) time to read the stale
-	// zero value from sharedMap under BlockSTM parallel execution.
-	simcanarykeeper.SetValueDelay = 10 * time.Millisecond
-
 	extraModuleOpts = append(extraModuleOpts, simcanaryModule())
 
 	extraTxBuilders["canary-map-set"] = buildCanaryMapSet
@@ -46,13 +41,11 @@ func init() {
 		oracleCanaryKeeper = nil
 	}
 
-	// OnKeeperCreated fires inside NewKeeper — earlier than depinject output
-	// injection — giving us a reliable registration path that works even when
-	// SetupWithConfiguration doesn't propagate the **Keeper output.
+	// OnKeeperCreated fires inside NewKeeper, before depinject output injection.
+	// Always overwrite so the last-constructed (live) keeper is captured, even
+	// if depinject constructs the module more than once.
 	simcanarykeeper.OnKeeperCreated = func(k *simcanarykeeper.Keeper) {
-		if oracleCanaryKeeper == nil {
-			oracleCanaryKeeper = k
-		}
+		oracleCanaryKeeper = k
 	}
 
 	// extraOracleMutTrackers is kept for backward compatibility but RunBlock
@@ -72,6 +65,16 @@ func init() {
 		if oracleCanaryKeeper != nil {
 			e.oracleTrackers = []compare.MutationTracker{oracleCanaryKeeper}
 		}
+	}
+
+	// Enable SetValueDelay only for the probe (between oracle and probe FinalizeBlock)
+	// so the oracle runs without the sleep and its sharedMap snapshot is clean.
+	// Reset after compare.Run so the next attempt starts fresh.
+	extraPreProbeSetup = func() {
+		simcanarykeeper.SetValueDelay = 50 * time.Millisecond
+	}
+	extraPostRunBlockHook = func() {
+		simcanarykeeper.SetValueDelay = 0
 	}
 
 	extraOracleBlockCtxTracker = func(height int64) *compare.BlockContextTracker {
