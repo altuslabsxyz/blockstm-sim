@@ -7,9 +7,16 @@ import (
 	"encoding/hex"
 	"sort"
 	"sync"
+	"time"
 
 	"cosmossdk.io/core/store"
 )
+
+// SetValueDelay, if positive, is inserted in SetMapValue before the mutex
+// acquisition. This widens the BlockSTM race window for C1 canary testing by
+// giving a concurrent MapReadAndWrite goroutine time to read the stale
+// zero-value before MapSet's write lands.
+var SetValueDelay time.Duration
 
 // BlockContextWriter is implemented by the compare block-context tracker
 // without requiring this package to import compare.
@@ -47,6 +54,9 @@ func NewKeeper(ss store.KVStoreService) *Keeper {
 }
 
 func (k *Keeper) SetMapValue(key string, value int64) {
+	if SetValueDelay > 0 {
+		time.Sleep(SetValueDelay)
+	}
 	k.mu.Lock()
 	k.sharedMap[key] = value
 	k.mu.Unlock()

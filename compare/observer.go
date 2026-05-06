@@ -134,6 +134,15 @@ func (o *BlockObserver) TxMutations(txIndex int) []MutationRecord {
 	return o.mutSets[txIndex]
 }
 
+// AddBlockMutation appends a mutation record to the block-level slot (txIndex=0).
+// This is the direct alternative to CaptureBeforeBlock/CaptureAfterBlock for
+// callers that manage snapshot diffing outside the observer.
+func (o *BlockObserver) AddBlockMutation(m MutationRecord) {
+	if len(o.mutSets) > 0 {
+		o.mutSets[0] = append(o.mutSets[0], m)
+	}
+}
+
 // CaptureBeforeBlock snapshots all tracker states into blockSnapshots. Call
 // this immediately before the oracle FinalizeBlock to establish a baseline.
 func (o *BlockObserver) CaptureBeforeBlock() {

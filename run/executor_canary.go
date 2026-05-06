@@ -4,6 +4,7 @@ package run
 
 import (
 	"fmt"
+	"time"
 
 	appv1alpha1 "cosmossdk.io/api/cosmos/app/v1alpha1"
 	"cosmossdk.io/core/appconfig"
@@ -25,6 +26,11 @@ var oracleCanaryKeeper *simcanarykeeper.Keeper
 var oracleBlockCtxTracker = compare.NewBlockContextTracker(nil)
 
 func init() {
+	// Widen the race window for C1 canary detection: TX0 (MapSet) sleeps before
+	// acquiring the mutex, giving TX1 (MapReadAndWrite) time to read the stale
+	// zero value from sharedMap under BlockSTM parallel execution.
+	simcanarykeeper.SetValueDelay = 10 * time.Millisecond
+
 	extraModuleOpts = append(extraModuleOpts, simcanaryModule())
 
 	extraTxBuilders["canary-map-set"] = buildCanaryMapSet
@@ -49,11 +55,23 @@ func init() {
 		}
 	}
 
+	// extraOracleMutTrackers is kept for backward compatibility but RunBlock
+	// now uses e.oracleTrackers (populated by extraPopulateOracleTrackers below).
 	extraOracleMutTrackers = func() []compare.MutationTracker {
 		if oracleCanaryKeeper == nil {
 			return nil
 		}
 		return []compare.MutationTracker{oracleCanaryKeeper}
+	}
+
+	// extraPopulateOracleTrackers captures the oracle's keeper into the executor
+	// immediately after oracle app setup, before the probe app is created.
+	// This ensures RunBlock's direct snapshot-diffing uses the correct keeper
+	// instance even if the package-level oracleCanaryKeeper is later cleared.
+	extraPopulateOracleTrackers = func(e *FixtureExecutor) {
+		if oracleCanaryKeeper != nil {
+			e.oracleTrackers = []compare.MutationTracker{oracleCanaryKeeper}
+		}
 	}
 
 	extraOracleBlockCtxTracker = func(height int64) *compare.BlockContextTracker {
