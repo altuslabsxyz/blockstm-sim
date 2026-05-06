@@ -23,14 +23,22 @@ import (
 // CaptureAfterBlock. The caller snapshots state before oracle FinalizeBlock and
 // diffs after; the delta is attributed to TxIndex=0. This avoids dependence on
 // OnTxStart/OnTxEnd, which are not guaranteed to fire in all SDK runners.
+//
+// Important: the SDK's executeTxsWithExecutor calls OnTxStart/OnTxEnd in a
+// post-hoc loop AFTER txRunner.Run returns, so all transactions have already
+// finished executing when those callbacks fire. OnTxStart(0) would overwrite
+// snapshots[0] with the already-mutated state, breaking CaptureAfterBlock.
+// blockSnapshots is a dedicated field that OnTxStart cannot touch, ensuring
+// CaptureBeforeBlock's baseline survives the post-hoc callback loop.
 type BlockObserver struct {
 	lifecycle.NoopLifecycleObserver
 	writeSets []map[string]struct{}
 
-	trackers  []MutationTracker
-	snapshots [][][]byte         // snapshots[txIdx][trackerIdx] = pre-tx snapshot
-	mutSets   [][]MutationRecord // mutSets[txIdx] = mutations detected in tx
-	txSetters []TxIndexSetter
+	trackers       []MutationTracker
+	snapshots      [][][]byte         // snapshots[txIdx][trackerIdx] = pre-tx snapshot
+	blockSnapshots [][]byte           // pre-block baseline for CaptureBeforeBlock/CaptureAfterBlock
+	mutSets        [][]MutationRecord // mutSets[txIdx] = mutations detected in tx
+	txSetters      []TxIndexSetter
 }
 
 var _ lifecycle.LifecycleObserver = (*BlockObserver)(nil)
@@ -52,12 +60,14 @@ func NewBlockObserver(txCount int, trackers ...MutationTracker) *BlockObserver {
 			setters = append(setters, setter)
 		}
 	}
+	blockSnaps := make([][]byte, len(trackers))
 	return &BlockObserver{
-		writeSets: ws,
-		trackers:  trackers,
-		snapshots: snaps,
-		mutSets:   make([][]MutationRecord, txCount),
-		txSetters: setters,
+		writeSets:      ws,
+		trackers:       trackers,
+		snapshots:      snaps,
+		blockSnapshots: blockSnaps,
+		mutSets:        make([][]MutationRecord, txCount),
+		txSetters:      setters,
 	}
 }
 
@@ -124,27 +134,27 @@ func (o *BlockObserver) TxMutations(txIndex int) []MutationRecord {
 	return o.mutSets[txIndex]
 }
 
-// CaptureBeforeBlock snapshots all tracker states into the tx-0 slot. Call
+// CaptureBeforeBlock snapshots all tracker states into blockSnapshots. Call
 // this immediately before the oracle FinalizeBlock to establish a baseline.
 func (o *BlockObserver) CaptureBeforeBlock() {
-	if len(o.trackers) == 0 || len(o.snapshots) == 0 {
+	if len(o.trackers) == 0 || len(o.blockSnapshots) == 0 {
 		return
 	}
 	for i, t := range o.trackers {
-		o.snapshots[0][i] = t.SnapshotOutOfKVStoreState()
+		o.blockSnapshots[i] = t.SnapshotOutOfKVStoreState()
 	}
 }
 
-// CaptureAfterBlock diffs current tracker states against the tx-0 pre-block
-// baseline and appends any changes to mutSets[0]. Call this immediately after
-// oracle FinalizeBlock returns.
+// CaptureAfterBlock diffs current tracker states against the pre-block
+// baseline in blockSnapshots and appends any changes to mutSets[0]. Call this
+// immediately after oracle FinalizeBlock returns.
 func (o *BlockObserver) CaptureAfterBlock() {
-	if len(o.trackers) == 0 || len(o.mutSets) == 0 || len(o.snapshots) == 0 {
+	if len(o.trackers) == 0 || len(o.mutSets) == 0 || len(o.blockSnapshots) == 0 {
 		return
 	}
 	for i, t := range o.trackers {
 		after := t.SnapshotOutOfKVStoreState()
-		before := o.snapshots[0][i]
+		before := o.blockSnapshots[i]
 		if !bytes.Equal(before, after) {
 			o.mutSets[0] = append(o.mutSets[0], MutationRecord{
 				Tracker: t.TrackerName(),

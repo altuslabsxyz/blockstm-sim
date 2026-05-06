@@ -207,7 +207,7 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	if err != nil {
 		return fmt.Errorf("setup probe app: %w", err)
 	}
-	instrument.InstrumentSTM(probeApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), nil, 4, false, nil))
+	instrument.InstrumentSTM(probeApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), nil, 4, false, nil, txnrunner.WithPerturbHook(rand.Int63())))
 
 	e.oracle = oracleApp
 	e.probe = probeApp
