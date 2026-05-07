@@ -16,7 +16,7 @@
 | STM runner construction | 2 funcs + 1 type | → `sdkhook.STMRunner` + `STMRunnerFactory` |
 | `sdk.TxRunner` type | 1 type | → `sdkhook.STMRunner` (absorbs) |
 | App constructor (`simtestutil`) | 1 func + 3 types | → `sdkhook.AppFactory` |
-| Upstream-stable types | many | stay as direct imports |
+| Upstream types | many | stay as direct imports |
 
 ---
 
@@ -96,22 +96,22 @@ type AppFactory func(genesis compare.GenesisSpec) (App, client.TxConfig, error)
 
 ---
 
-## Stays as Direct Import (upstream-stable)
+## Stays as Direct Import (upstream)
 
 These are in unmodified upstream cosmos-sdk or cometbft. No abstraction needed.
 
 | Package | Symbols used | Notes |
 |---------|-------------|-------|
-| `github.com/cometbft/cometbft/abci/types` | `RequestFinalizeBlock`, `ResponseFinalizeBlock` | stable upstream |
-| `cosmossdk.io/store/types` | `StoreKey` | stable upstream |
-| `github.com/cosmos/cosmos-sdk/types` | `TxDecoder`, `Msg`, `AccAddress`, `Coins`, etc. | stable upstream (excluding `TxRunner`) |
-| `github.com/cosmos/cosmos-sdk/client` | `TxConfig` | stable upstream |
-| `github.com/cosmos/cosmos-sdk/crypto/types` | `PrivKey` | stable upstream |
-| `cosmossdk.io/depinject` | `Config`, `Supply`, etc. | stable upstream |
-| `cosmossdk.io/log` | `Logger`, `NewNopLogger` | stable upstream |
-| `cosmossdk.io/core/store` | `KVStoreService` | stable upstream |
-| `github.com/cosmos/cosmos-db` | `DB`, `NewMemDB` | stable upstream |
-| `github.com/cometbft/cometbft/types` | `ValidatorSet` | stable upstream |
+| `github.com/cometbft/cometbft/abci/types` | `RequestFinalizeBlock`, `ResponseFinalizeBlock` | upstream |
+| `cosmossdk.io/store/types` | `StoreKey` | upstream |
+| `github.com/cosmos/cosmos-sdk/types` | `TxDecoder`, `Msg`, `AccAddress`, `Coins`, etc. | upstream (excluding `TxRunner`) |
+| `github.com/cosmos/cosmos-sdk/client` | `TxConfig` | upstream |
+| `github.com/cosmos/cosmos-sdk/crypto/types` | `PrivKey` | upstream |
+| `cosmossdk.io/depinject` | `Config`, `Supply`, etc. | upstream |
+| `cosmossdk.io/log` | `Logger`, `NewNopLogger` | upstream |
+| `cosmossdk.io/core/store` | `KVStoreService` | upstream |
+| `github.com/cosmos/cosmos-db` | `DB`, `NewMemDB` | upstream |
+| `github.com/cometbft/cometbft/types` | `ValidatorSet` | upstream |
 
 ---
 
@@ -132,7 +132,7 @@ These are in unmodified upstream cosmos-sdk or cometbft. No abstraction needed.
 
 ```go
 type App interface {
-    // From cometbft ABCI — upstream-stable, already on runtime.App
+    // From cometbft ABCI — upstream, already on runtime.App
     FinalizeBlock(*abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error)
 
     // BlockSTM control — added to runtime.App by SDK fork
