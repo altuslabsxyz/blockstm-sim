@@ -1,8 +1,7 @@
 # SDK Fork-Specific API Inventory
 
 > **Purpose**: Identify every call site in `blockstm-sim` that depends on a cosmos-sdk fork's
-> BlockSTM-specific additions. This drives the interface design in
-> [PLA-71](https://linear.app/bharvest/issue/PLA-71) (`sdkhook/sdkhook.go`).
+> BlockSTM-specific additions. This drives the interface design in `sdkhook/sdkhook.go`.
 >
 > **Rule**: Anything in this doc's "Must be interfaced" section cannot remain as a direct import
 > in `run/` or `instrument/`. It must be hidden behind an interface defined in `sdkhook/`.
@@ -25,18 +24,17 @@
 
 ### 1. App lifecycle methods
 
-Methods added to `runtime.App` in the SDK fork (PLA-47, PLA-49). Not in upstream cosmos-sdk.
+Methods added to `runtime.App` in the SDK fork. Not in upstream cosmos-sdk.
 
-| Method | Signature | Added by | Call sites |
-|--------|-----------|----------|-----------|
-| `SetLifecycleObserver` | `(compare.LifecycleObserver)` | PLA-47/49 | `run/executor.go:273,274,304,305`<br>`run/repeat_executor.go:105,111,171,173` |
-| `UnsetBlockSTMTxRunner` | `()` | PLA-49 | `instrument/instrument.go:35`<br>`run/repeat_executor.go:57` |
-| `SetBlockSTMTxRunner` | `(sdk.TxRunner)` | PLA-49 | `instrument/instrument_stm.go:15` |
-| `SetDisableBlockGasMeter` | `(bool)` | fork | `instrument/instrument_stm.go:14` |
-| `GetStoreKeys` | `() []storetypes.StoreKey` | fork or upstream | `run/executor.go:217`<br>`run/repeat_executor.go:68` |
+| Method | Signature | Call sites |
+|--------|-----------|-----------|
+| `SetLifecycleObserver` | `(compare.LifecycleObserver)` | `run/executor.go:273,274,304,305`<br>`run/repeat_executor.go:105,111,171,173` |
+| `UnsetBlockSTMTxRunner` | `()` | `instrument/instrument.go:35`<br>`run/repeat_executor.go:57` |
+| `SetBlockSTMTxRunner` | `(sdk.TxRunner)` | `instrument/instrument_stm.go:15` |
+| `SetDisableBlockGasMeter` | `(bool)` | `instrument/instrument_stm.go:14` |
+| `GetStoreKeys` | `() []storetypes.StoreKey` | `run/executor.go:217`<br>`run/repeat_executor.go:68` |
 
-**→ Becomes**: `sdkhook.App` interface. `*runtime.App` fields in `FixtureExecutor` and
-`RepeatRunExecutor` become `sdkhook.App`.
+**→ Becomes**: `sdkhook.App` interface. `*runtime.App` fields in `FixtureExecutor` and `RepeatRunExecutor` become `sdkhook.App`.
 
 ---
 
@@ -126,7 +124,7 @@ These are in unmodified upstream cosmos-sdk or cometbft. No abstraction needed.
 | `run/repeat_executor.go` | `RepeatRunExecutor` | same split |
 | `run/perturb.go` | `newSTMRunnerForProbe` | `cmd/.../sdkimpl/` (uses `txnrunner` directly) |
 | `instrument/instrument_stm.go` | `InstrumentSTM`, `STMInstrumentable` | merged into `instrument/instrument.go` using `sdkhook.App` |
-| `run/executor_canary.go` | canary-specific `init()` hooks | stays, loses `extraPopulateOracleTrackers` in PLA-74 |
+| `run/executor_canary.go` | canary-specific `init()` hooks | stays, loses `extraPopulateOracleTrackers` after reflect tracker lands |
 
 ---
 
@@ -137,12 +135,12 @@ type App interface {
     // From cometbft ABCI — upstream-stable, already on runtime.App
     FinalizeBlock(*abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error)
 
-    // BlockSTM control — added to runtime.App by SDK fork (PLA-49)
+    // BlockSTM control — added to runtime.App by SDK fork
     SetBlockSTMTxRunner(STMRunner)
     UnsetBlockSTMTxRunner()
     SetDisableBlockGasMeter(bool)
 
-    // Observer — added to runtime.App by SDK fork (PLA-47)
+    // Observer — added to runtime.App by SDK fork
     SetLifecycleObserver(compare.LifecycleObserver)
 
     // Store access — used to wire STMRunner; may be upstream
@@ -152,4 +150,4 @@ type App interface {
 
 ---
 
-*Generated for PLA-70. Input to PLA-71 (sdkhook interface design).*
+*Input to `sdkhook/sdkhook.go` interface design.*
