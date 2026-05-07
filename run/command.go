@@ -1,5 +1,3 @@
-//go:build sdk_hooks
-
 package run
 
 import (
@@ -12,15 +10,23 @@ import (
 	"github.com/altuslabsxyz/blockstm-sim/report"
 )
 
+// newExecutorFn is set by the sdk_hooks build to wire in a real executor.
+// Nil in a public (no-tag) build, causing NewCommand to return an error.
+var newExecutorFn func(probes int) Executor
+
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run fixture corpus and report comparison results",
 		Long: "Execute all fixtures in a corpus directory and report comparison results.\n\n" +
-				"With --probes=1 (default, F1 mode): compare oracle (sequential) vs a single BlockSTM probe.\n" +
-				"With --probes=N (N>1, F2 mode): run 1 oracle + N BlockSTM probes with distinct scheduler\n" +
-				"perturbations and compare all probes against each other to detect non-determinism.",
+			"With --probes=1 (default, F1 mode): compare oracle (sequential) vs a single BlockSTM probe.\n" +
+			"With --probes=N (N>1, F2 mode): run 1 oracle + N BlockSTM probes with distinct scheduler\n" +
+			"perturbations and compare all probes against each other to detect non-determinism.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if newExecutorFn == nil {
+				return fmt.Errorf("simulation execution requires an SDK hook-enabled build")
+			}
+
 			corpus, _ := cmd.Flags().GetString("corpus")
 			probes, _ := cmd.Flags().GetInt("probes")
 			failOnDiv, _ := cmd.Flags().GetBool("fail-on-divergence")
@@ -48,13 +54,7 @@ func NewCommand() *cobra.Command {
 				FailOnDivergence: failOnDiv,
 			}
 
-			var exec Executor
-			if probes > 1 {
-				exec = NewRepeatRunExecutor(probes)
-			} else {
-				exec = NewFixtureExecutor()
-			}
-			code := RunHarness(cfg, exec, stores, rep, os.Stderr)
+			code := RunHarness(cfg, newExecutorFn(probes), stores, rep, os.Stderr)
 			if code != 0 {
 				os.Exit(code)
 			}
