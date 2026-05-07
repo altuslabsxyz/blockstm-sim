@@ -10,6 +10,7 @@ import (
 	"github.com/altuslabsxyz/blockstm-sim/run"
 	"github.com/altuslabsxyz/blockstm-sim/version"
 
+	_ "github.com/altuslabsxyz/blockstm-sim/cmd/blockstm-sim/sdkimpl"
 	_ "github.com/altuslabsxyz/blockstm-sim/simharness"
 )
 

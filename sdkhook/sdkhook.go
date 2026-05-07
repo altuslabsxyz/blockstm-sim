@@ -44,7 +44,9 @@ type App interface {
 
 // STMRunner is the parallel BlockSTM transaction runner.
 // blockstm-sim treats it as opaque: constructed via STMRunnerFactory and passed
-// to App.SetBlockSTMTxRunner. The SDK fork's *txnrunner.STMRunner satisfies this.
+// to App.SetBlockSTMTxRunner. sdk.TxRunner (fork-only) is not referenced here so
+// that sdkhook compiles against upstream cosmos-sdk. The sdkimpl adapter performs
+// the concrete type assertion when wiring into runtime.App.
 type STMRunner interface{}
 
 // STMRunnerFactory constructs an STMRunner for the given configuration.
@@ -59,6 +61,32 @@ type STMRunnerFactory func(
 	workers int,
 	perturbSeed int64,
 ) STMRunner
+
+// AppWrapFunc adapts a raw SDK app (e.g. *runtime.App) into an sdkhook.App.
+// Required because the SDK fork's SetLifecycleObserver may use an internal
+// lifecycle type until the fork adopts sdkhook's LifecycleObserver directly.
+// Registered by the chain adapter's init() in its cmd entry point.
+type AppWrapFunc func(rawApp any) App
+
+var appWrapFn AppWrapFunc
+
+// RegisterAppWrapper registers the AppWrapFunc provided by the chain adapter.
+// Panics if called more than once.
+func RegisterAppWrapper(f AppWrapFunc) {
+	if appWrapFn != nil {
+		panic("sdkhook: AppWrapper already registered")
+	}
+	appWrapFn = f
+}
+
+// WrapApp wraps a raw SDK app using the registered AppWrapFunc.
+// Panics if no wrapper has been registered.
+func WrapApp(rawApp any) App {
+	if appWrapFn == nil {
+		panic("sdkhook: no AppWrapper registered; call RegisterAppWrapper in your adapter init()")
+	}
+	return appWrapFn(rawApp)
+}
 
 // runnerFactory is the registered STMRunnerFactory. Nil until RegisterSTMRunnerFactory
 // is called by the chain adapter's init().

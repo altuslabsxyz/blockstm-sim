@@ -16,10 +16,8 @@ import (
 	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
 
-	"github.com/cosmos/cosmos-sdk/baseapp/txnrunner"
 	"github.com/cosmos/cosmos-sdk/client"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/testutil/configurator"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -36,30 +34,28 @@ import (
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 	"github.com/altuslabsxyz/blockstm-sim/instrument"
+	"github.com/altuslabsxyz/blockstm-sim/sdkhook"
 )
 
-// initApp creates a fresh runtime.App with a new MemDB using the provided
-// depinject config, startup config, and an optional pointer to receive the
-// TxConfig (pass nil if already obtained). The caller is responsible for
-// instrumenting the returned app with a runner afterward.
-func initApp(cfg depinject.Config, baseCfg simtestutil.StartupConfig, txCfgOut *client.TxConfig) (*runtime.App, error) {
+// initApp creates a fresh app with a new MemDB using the provided depinject
+// config, startup config, and an optional pointer to receive the TxConfig.
+func initApp(cfg depinject.Config, baseCfg simtestutil.StartupConfig, txCfgOut *client.TxConfig) (sdkhook.App, error) {
 	baseCfg.DB = dbm.NewMemDB()
 	if txCfgOut != nil {
 		app, err := simtestutil.SetupWithConfiguration(cfg, baseCfg, txCfgOut)
 		if err != nil {
 			return nil, err
 		}
-		return app, nil
+		return sdkhook.WrapApp(app), nil
 	}
 	app, err := simtestutil.SetupWithConfiguration(cfg, baseCfg)
 	if err != nil {
 		return nil, err
 	}
-	return app, nil
+	return sdkhook.WrapApp(app), nil
 }
 
-// buildTx builds and signs a single transaction from a TxSpec using the
-// provided txConfig, keys, accountNums and sequences maps.
+// buildTx builds and signs a single transaction from a TxSpec.
 // sequences[spec.Signer] is incremented as a side-effect.
 func buildTx(
 	spec compare.TxSpec,
@@ -137,8 +133,7 @@ var (
 	extraPopulateOracleTrackers func(*FixtureExecutor)
 	// extraPreProbeSetup is called inside PostOracleHook (between oracle and
 	// probe FinalizeBlock) to configure any probe-specific state before the
-	// probe executes. Use this to enable race-widening delays that must NOT
-	// affect oracle execution.
+	// probe executes.
 	extraPreProbeSetup func()
 	// extraPostRunBlockHook is called after compare.Run returns in RunBlock to
 	// clean up any block-scoped state set by extraPreProbeSetup.
@@ -164,8 +159,8 @@ func buildAppConfig() depinject.Config {
 }
 
 type FixtureExecutor struct {
-	oracle        *runtime.App
-	probe         *runtime.App
+	oracle        sdkhook.App
+	probe         sdkhook.App
 	txConfig      client.TxConfig
 	keys          map[string]cryptotypes.PrivKey
 	accountNums   map[string]uint64
@@ -177,8 +172,6 @@ type FixtureExecutor struct {
 }
 
 // WithSTMOracle configures the oracle to use BlockSTM with more than one worker.
-// The default is already 1-worker BlockSTM; this override is for cases where
-// multi-worker parallelism in the oracle is explicitly desired.
 func WithSTMOracle(workers int) func(*FixtureExecutor) {
 	return func(e *FixtureExecutor) { e.oracleWorkers = workers }
 }
@@ -205,16 +198,17 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 		extraPreOracleSetup()
 	}
 	oracleOutputs := append([]any{&txCfg}, extraOracleOutputs...)
-	oracleApp, err := simtestutil.SetupWithConfiguration(cfg, gs.baseCfg, oracleOutputs...)
+	rawOracleApp, err := simtestutil.SetupWithConfiguration(cfg, gs.baseCfg, oracleOutputs...)
 	if err != nil {
 		return fmt.Errorf("setup oracle app: %w", err)
 	}
+	oracleApp := sdkhook.WrapApp(rawOracleApp)
 	{
 		workers := e.oracleWorkers
 		if workers == 0 {
 			workers = 1
 		}
-		instrument.InstrumentSTM(oracleApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), oracleApp.GetStoreKeys(), workers, false, nil))
+		instrument.InstrumentSTM(oracleApp, sdkhook.NewSTMRunner(txCfg.TxDecoder(), oracleApp.GetStoreKeys(), workers, 0))
 	}
 
 	if extraPopulateOracleTrackers != nil {
@@ -225,7 +219,7 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	if err != nil {
 		return fmt.Errorf("setup probe app: %w", err)
 	}
-	instrument.InstrumentSTM(probeApp, txnrunner.NewSTMRunner(txCfg.TxDecoder(), probeApp.GetStoreKeys(), 4, false, nil, txnrunner.WithPerturbHook(rand.Int63())))
+	instrument.InstrumentSTM(probeApp, sdkhook.NewSTMRunner(txCfg.TxDecoder(), probeApp.GetStoreKeys(), 4, rand.Int63()))
 
 	e.oracle = oracleApp
 	e.probe = probeApp
@@ -252,17 +246,11 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		blockCtxTracker = extraOracleBlockCtxTracker(height)
 	}
 
-	// Build the tracker list for this block: executor-level oracle trackers plus
-	// the per-block context tracker (if any). This list is captured by the
-	// PostOracleHook closure for direct snapshot diffing.
 	oracleTrackers := append([]compare.MutationTracker(nil), e.oracleTrackers...)
 	if blockCtxTracker != nil {
 		oracleTrackers = append(oracleTrackers, blockCtxTracker)
 	}
 
-	// Snapshot each tracker's out-of-KVStore state before oracle execution so
-	// the PostOracleHook closure can diff against it. This does not go through
-	// the observer lifecycle callbacks, avoiding post-hoc OnTxStart races.
 	oraclePreSnaps := make([][]byte, len(oracleTrackers))
 	for i, t := range oracleTrackers {
 		oraclePreSnaps[i] = t.SnapshotOutOfKVStoreState()
@@ -328,8 +316,6 @@ func (e *FixtureExecutor) Close() {
 	e.oracleTrackers = nil
 }
 
-// buildTx is a convenience method on FixtureExecutor that delegates to the
-// package-level buildTx helper, keeping internal test compatibility.
 func (e *FixtureExecutor) buildTx(spec compare.TxSpec) ([]byte, error) {
 	return buildTx(spec, e.txConfig, e.keys, e.accountNums, e.sequences)
 }
@@ -353,8 +339,7 @@ type genesisSetup struct {
 }
 
 // initGenesis builds per-account keys, account numbers, and a StartupConfig
-// from a GenesisSpec.  Both FixtureExecutor and RepeatRunExecutor call this
-// so the ~30-line block is not duplicated.
+// from a GenesisSpec.
 func initGenesis(genesis compare.GenesisSpec) (genesisSetup, error) {
 	names := sortedAccountNames(genesis.Accounts)
 
