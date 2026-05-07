@@ -117,8 +117,10 @@ func TestCanaryF4_OutOfKVStoreMutationDetected(t *testing.T) {
 		"F4 must detect out-of-KVStore mutation in canary-01-keeper-map on every run")
 	require.Equal(t, 0, f4Findings[0].TxIndex,
 		"MapSet (tx 0) mutates sharedMap and must be detected by F4")
-	require.Contains(t, f4Findings[0].Oracle, "simcanary.sharedMap")
-	require.Contains(t, f4Findings[0].Probe, "simcanary.sharedMap")
+	require.Contains(t, f4Findings[0].Oracle, "x/simcanary",
+		"finding must be attributed to the simcanary module tracker")
+	require.Contains(t, f4Findings[0].Probe, "x/simcanary",
+		"finding must be attributed to the simcanary module tracker")
 	require.NotEqual(t, f4Findings[0].Oracle, f4Findings[0].Probe,
 		"before and after snapshots must differ")
 }
