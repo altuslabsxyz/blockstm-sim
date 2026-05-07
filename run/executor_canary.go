@@ -41,32 +41,6 @@ func init() {
 		oracleCanaryKeeper = nil
 	}
 
-	// OnKeeperCreated fires inside NewKeeper, before depinject output injection.
-	// Always overwrite so the last-constructed (live) keeper is captured, even
-	// if depinject constructs the module more than once.
-	simcanarykeeper.OnKeeperCreated = func(k *simcanarykeeper.Keeper) {
-		oracleCanaryKeeper = k
-	}
-
-	// extraOracleMutTrackers is kept for backward compatibility but RunBlock
-	// now uses e.oracleTrackers (populated by extraPopulateOracleTrackers below).
-	extraOracleMutTrackers = func() []compare.MutationTracker {
-		if oracleCanaryKeeper == nil {
-			return nil
-		}
-		return []compare.MutationTracker{oracleCanaryKeeper}
-	}
-
-	// extraPopulateOracleTrackers captures the oracle's keeper into the executor
-	// immediately after oracle app setup, before the probe app is created.
-	// This ensures RunBlock's direct snapshot-diffing uses the correct keeper
-	// instance even if the package-level oracleCanaryKeeper is later cleared.
-	extraPopulateOracleTrackers = func(e *FixtureExecutor) {
-		if oracleCanaryKeeper != nil {
-			e.oracleTrackers = []compare.MutationTracker{oracleCanaryKeeper}
-		}
-	}
-
 	// Enable SetValueDelay only for the probe (between oracle and probe FinalizeBlock)
 	// so the oracle runs without the sleep and its sharedMap snapshot is clean.
 	// Reset after compare.Run so the next attempt starts fresh.

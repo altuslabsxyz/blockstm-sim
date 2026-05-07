@@ -126,12 +126,8 @@ var (
 	extraModuleOpts            []configurator.ModuleOption
 	extraTxBuilders            = map[string]txBuilderFn{}
 	extraOracleOutputs         []any
-	extraOracleMutTrackers     func() []compare.MutationTracker
 	extraOracleBlockCtxTracker func(height int64) *compare.BlockContextTracker
 	extraPreOracleSetup        func()
-	// extraPopulateOracleTrackers is called after oracle app setup in Init to
-	// populate the executor's oracleTrackers field from any registered keepers.
-	extraPopulateOracleTrackers func(*FixtureExecutor)
 	// extraPreProbeSetup is called inside PostOracleHook (between oracle and
 	// probe FinalizeBlock) to configure any probe-specific state before the
 	// probe executes.
@@ -168,7 +164,7 @@ type FixtureExecutor struct {
 	sequences     map[string]uint64
 	oracleWorkers int // 0 = 1-worker BlockSTM (deterministic); >0 = BlockSTM with N workers
 	// oracleTrackers holds the out-of-KVStore mutation trackers for the oracle app.
-	// Populated by extraPopulateOracleTrackers after oracle setup in Init.
+	// Populated via reflect-based discovery after oracle setup in Init.
 	oracleTrackers []compare.MutationTracker
 }
 
@@ -210,10 +206,6 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 			workers = 1
 		}
 		instrument.InstrumentSTM(oracleApp, sdkhook.NewSTMRunner(txCfg.TxDecoder(), oracleApp.GetStoreKeys(), workers, 0))
-	}
-
-	if extraPopulateOracleTrackers != nil {
-		extraPopulateOracleTrackers(e)
 	}
 
 	// Populate generic reflect-based trackers for all discovered modules/keepers.
