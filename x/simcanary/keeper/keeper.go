@@ -1,11 +1,8 @@
 package keeper
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/hex"
-	"sort"
 	"sync"
 	"time"
 
@@ -37,20 +34,11 @@ type Keeper struct {
 	blockCtxWriter BlockContextWriter
 }
 
-// OnKeeperCreated, if non-nil, is called whenever a new Keeper is constructed.
-// The run package sets this to register the oracle's keeper for F4 mutation tracking,
-// bypassing depinject output injection which may not be supported by all SDK builds.
-var OnKeeperCreated func(*Keeper)
-
 func NewKeeper(ss store.KVStoreService) *Keeper {
-	k := &Keeper{
+	return &Keeper{
 		storeService: ss,
 		sharedMap:    make(map[string]int64),
 	}
-	if OnKeeperCreated != nil {
-		OnKeeperCreated(k)
-	}
-	return k
 }
 
 func (k *Keeper) SetMapValue(key string, value int64) {
@@ -94,27 +82,3 @@ func (k *Keeper) WriteToStore(ctx context.Context, key string, value int64) erro
 	return kvStore.Set([]byte("canary/"+key), buf)
 }
 
-func (k *Keeper) TrackerName() string { return "simcanary.sharedMap" }
-
-func (k *Keeper) SnapshotOutOfKVStoreState() []byte {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if len(k.sharedMap) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(k.sharedMap))
-	for key := range k.sharedMap {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	var buf bytes.Buffer
-	valBuf := make([]byte, 8)
-	for _, key := range keys {
-		binary.BigEndian.PutUint64(valBuf, uint64(k.sharedMap[key]))
-		buf.WriteString(key)
-		buf.WriteByte('=')
-		buf.WriteString(hex.EncodeToString(valBuf))
-		buf.WriteByte('\n')
-	}
-	return buf.Bytes()
-}
