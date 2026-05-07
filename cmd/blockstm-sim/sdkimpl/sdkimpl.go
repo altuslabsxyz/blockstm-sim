@@ -37,6 +37,15 @@ func (a *appAdapter) SetBlockSTMTxRunner(runner sdkhook.STMRunner) {
 }
 
 func init() {
+	sdkhook.RegisterKeeperDiscovery(func(raw any) []any {
+		app := raw.(*runtime.App)
+		mods := make([]any, 0, len(app.ModuleManager.Modules))
+		for _, mod := range app.ModuleManager.Modules {
+			mods = append(mods, mod)
+		}
+		return mods
+	})
+
 	sdkhook.RegisterAppWrapper(func(rawApp any) sdkhook.App {
 		return &appAdapter{rawApp.(*runtime.App)}
 	})

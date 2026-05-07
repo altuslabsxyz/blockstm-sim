@@ -35,6 +35,7 @@ import (
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 	"github.com/altuslabsxyz/blockstm-sim/instrument"
 	"github.com/altuslabsxyz/blockstm-sim/sdkhook"
+	"github.com/altuslabsxyz/blockstm-sim/tracker"
 )
 
 // initApp creates a fresh app with a new MemDB using the provided depinject
@@ -213,6 +214,11 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 
 	if extraPopulateOracleTrackers != nil {
 		extraPopulateOracleTrackers(e)
+	}
+
+	// Populate generic reflect-based trackers for all discovered modules/keepers.
+	for _, mod := range sdkhook.DiscoverKeepers(rawOracleApp) {
+		e.oracleTrackers = append(e.oracleTrackers, tracker.New(mod))
 	}
 
 	probeApp, err := initApp(cfg, gs.baseCfg, nil)

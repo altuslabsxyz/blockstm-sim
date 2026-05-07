@@ -20,6 +20,15 @@ import (
 // In production, cmd/blockstm-sim/sdkimpl registers these via init(); tests do
 // not import that cmd package, so registration happens here instead.
 func TestMain(m *testing.M) {
+	sdkhook.RegisterKeeperDiscovery(func(raw any) []any {
+		app := raw.(*runtime.App)
+		mods := make([]any, 0, len(app.ModuleManager.Modules))
+		for _, mod := range app.ModuleManager.Modules {
+			mods = append(mods, mod)
+		}
+		return mods
+	})
+
 	sdkhook.RegisterAppWrapper(func(raw any) sdkhook.App {
 		return &testAppAdapter{raw.(*runtime.App)}
 	})
