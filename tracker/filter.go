@@ -31,7 +31,7 @@ var denyPkgPrefixes = []string{
 // and interface fields (whose concrete types are unknown at compile time).
 func shouldSkipField(f reflect.StructField) bool {
 	ft := f.Type
-	for ft.Kind() == reflect.Ptr {
+	for ft.Kind() == reflect.Pointer {
 		ft = ft.Elem()
 	}
 

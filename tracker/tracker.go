@@ -29,7 +29,7 @@ type KeeperReflectTracker struct {
 // the concrete type's package path and name.
 func New(obj any) *KeeperReflectTracker {
 	t := reflect.TypeOf(obj)
-	for t != nil && t.Kind() == reflect.Ptr {
+	for t != nil && t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	name := "unknown"
@@ -60,7 +60,7 @@ func snapshotVal(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, d
 		return
 	}
 	switch v.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v.IsNil() {
 			return
 		}
