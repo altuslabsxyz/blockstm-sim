@@ -62,6 +62,31 @@ type STMRunnerFactory func(
 	perturbSeed int64,
 ) STMRunner
 
+// KeeperDiscoveryFunc returns the set of keeper/module instances whose
+// out-of-KVStore state should be tracked. Called once per oracle app setup.
+// Registered by the chain adapter's init() in its cmd entry point.
+type KeeperDiscoveryFunc func(rawApp any) []any
+
+var keeperDiscoveryFn KeeperDiscoveryFunc
+
+// RegisterKeeperDiscovery registers the KeeperDiscoveryFunc provided by the
+// chain adapter. Panics if called more than once.
+func RegisterKeeperDiscovery(f KeeperDiscoveryFunc) {
+	if keeperDiscoveryFn != nil {
+		panic("sdkhook: KeeperDiscovery already registered")
+	}
+	keeperDiscoveryFn = f
+}
+
+// DiscoverKeepers returns all keeper/module instances from the raw app using
+// the registered discovery function. Returns nil if none is registered.
+func DiscoverKeepers(rawApp any) []any {
+	if keeperDiscoveryFn == nil {
+		return nil
+	}
+	return keeperDiscoveryFn(rawApp)
+}
+
 // AppWrapFunc adapts a raw SDK app (e.g. *runtime.App) into an sdkhook.App.
 // Required because the SDK fork's SetLifecycleObserver may use an internal
 // lifecycle type until the fork adopts sdkhook's LifecycleObserver directly.
