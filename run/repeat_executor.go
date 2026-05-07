@@ -1,5 +1,3 @@
-//go:build sdk_hooks
-
 package run
 
 import (
@@ -11,10 +9,10 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
-	"github.com/cosmos/cosmos-sdk/runtime"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 	"github.com/altuslabsxyz/blockstm-sim/instrument"
+	"github.com/altuslabsxyz/blockstm-sim/sdkhook"
 )
 
 // RepeatRunExecutor implements Executor for F2 repeat-run determinism checking.
@@ -22,8 +20,8 @@ import (
 // perturbation) and compares all probes against each other.
 type RepeatRunExecutor struct {
 	n           int
-	oracle      *runtime.App
-	probes      []*runtime.App
+	oracle      sdkhook.App
+	probes      []sdkhook.App
 	txConfig    client.TxConfig
 	keys        map[string]cryptotypes.PrivKey
 	accountNums map[string]uint64
@@ -59,7 +57,7 @@ func (e *RepeatRunExecutor) Init(genesis compare.GenesisSpec) error {
 	// e.n holds the desired probe count set by NewRepeatRunExecutor; it is only
 	// used here in Init to size the probe slice.
 	probeCfgs := generateProbeConfigs(e.n)
-	probes := make([]*runtime.App, len(probeCfgs))
+	probes := make([]sdkhook.App, len(probeCfgs))
 	for i, pcfg := range probeCfgs {
 		probeApp, err := initApp(cfg, gs.baseCfg, nil)
 		if err != nil {

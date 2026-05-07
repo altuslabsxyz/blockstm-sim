@@ -1,5 +1,3 @@
-//go:build sdk_hooks
-
 package run
 
 func init() {
