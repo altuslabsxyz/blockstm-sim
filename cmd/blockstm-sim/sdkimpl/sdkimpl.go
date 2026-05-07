@@ -29,6 +29,13 @@ func (a *appAdapter) SetLifecycleObserver(obs compare.LifecycleObserver) {
 	a.App.SetLifecycleObserver(obs.(lifecycle.LifecycleObserver))
 }
 
+// SetBlockSTMTxRunner adapts sdkhook.STMRunner (interface{}) → sdk.TxRunner.
+// The runner was created by the registered STMRunnerFactory which returns
+// *txnrunner.STMRunner — a concrete type that implements sdk.TxRunner.
+func (a *appAdapter) SetBlockSTMTxRunner(runner sdkhook.STMRunner) {
+	a.App.SetBlockSTMTxRunner(runner.(sdk.TxRunner))
+}
+
 func init() {
 	sdkhook.RegisterAppWrapper(func(rawApp any) sdkhook.App {
 		return &appAdapter{rawApp.(*runtime.App)}

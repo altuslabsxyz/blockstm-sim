@@ -43,10 +43,11 @@ type App interface {
 }
 
 // STMRunner is the parallel BlockSTM transaction runner.
-// It is an alias for sdk.TxRunner so that the SDK fork's runtime.App.SetBlockSTMTxRunner
-// satisfies sdkhook.App without an adapter — the method signatures match exactly.
-// The SDK fork's *txnrunner.STMRunner implements sdk.TxRunner and therefore STMRunner.
-type STMRunner = sdk.TxRunner
+// blockstm-sim treats it as opaque: constructed via STMRunnerFactory and passed
+// to App.SetBlockSTMTxRunner. sdk.TxRunner (fork-only) is not referenced here so
+// that sdkhook compiles against upstream cosmos-sdk. The sdkimpl adapter performs
+// the concrete type assertion when wiring into runtime.App.
+type STMRunner interface{}
 
 // STMRunnerFactory constructs an STMRunner for the given configuration.
 //
