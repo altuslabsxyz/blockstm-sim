@@ -156,6 +156,13 @@ func buildAppConfig() depinject.Config {
 	)
 }
 
+// AppFactory creates and initialises a fresh app backed by db.
+// If txCfgOut is non-nil, the factory must populate it with the app's TxConfig.
+// outputs captures additional dependency-injection targets (e.g. keeper pointers);
+// chain-side factories that do not use depinject may ignore them.
+// The second return value is the raw (unwrapped) app passed to sdkhook.DiscoverKeepers.
+type AppFactory func(db dbm.DB, txCfgOut *client.TxConfig, outputs ...any) (sdkhook.App, any, error)
+
 type FixtureExecutor struct {
 	oracle        sdkhook.App
 	probe         sdkhook.App
@@ -167,11 +174,21 @@ type FixtureExecutor struct {
 	// oracleTrackers holds the out-of-KVStore mutation trackers for the oracle app.
 	// Populated via reflect-based discovery after oracle setup in Init.
 	oracleTrackers []compare.MutationTracker
+	// appFactory, when non-nil, overrides the default simtestutil-based app construction.
+	// Set via WithAppFactory to wire a real chain app (e.g. stable.NewApp()).
+	appFactory AppFactory
 }
 
 // WithSTMOracle configures the oracle to use BlockSTM with more than one worker.
 func WithSTMOracle(workers int) func(*FixtureExecutor) {
 	return func(e *FixtureExecutor) { e.oracleWorkers = workers }
+}
+
+// WithAppFactory sets a custom app construction function on the executor.
+// Use this to wire a real chain app (e.g. stable.NewApp()) instead of the
+// default simtestutil-based test app. See docs/integration.md for an example.
+func WithAppFactory(f AppFactory) func(*FixtureExecutor) {
+	return func(e *FixtureExecutor) { e.appFactory = f }
 }
 
 func NewFixtureExecutor(opts ...func(*FixtureExecutor)) *FixtureExecutor {
@@ -189,18 +206,31 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	}
 
 	var txCfg client.TxConfig
-
 	cfg := buildAppConfig()
-	gs.baseCfg.DB = dbm.NewMemDB()
+
 	if extraPreOracleSetup != nil {
 		extraPreOracleSetup()
 	}
-	oracleOutputs := append([]any{&txCfg}, extraOracleOutputs...)
-	rawOracleApp, err := simtestutil.SetupWithConfiguration(cfg, gs.baseCfg, oracleOutputs...)
-	if err != nil {
-		return fmt.Errorf("setup oracle app: %w", err)
+
+	var oracleApp sdkhook.App
+	var rawOracleApp any
+
+	if e.appFactory != nil {
+		oracleApp, rawOracleApp, err = e.appFactory(dbm.NewMemDB(), &txCfg, extraOracleOutputs...)
+		if err != nil {
+			return fmt.Errorf("setup oracle app: %w", err)
+		}
+	} else {
+		oracleOutputs := append([]any{&txCfg}, extraOracleOutputs...)
+		gs.baseCfg.DB = dbm.NewMemDB()
+		raw, err2 := simtestutil.SetupWithConfiguration(cfg, gs.baseCfg, oracleOutputs...)
+		if err2 != nil {
+			return fmt.Errorf("setup oracle app: %w", err2)
+		}
+		oracleApp = sdkhook.WrapApp(raw)
+		rawOracleApp = raw
 	}
-	oracleApp := sdkhook.WrapApp(rawOracleApp)
+
 	{
 		workers := e.oracleWorkers
 		if workers == 0 {
@@ -214,9 +244,17 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 		e.oracleTrackers = append(e.oracleTrackers, tracker.New(mod))
 	}
 
-	probeApp, err := initApp(cfg, gs.baseCfg, nil)
-	if err != nil {
-		return fmt.Errorf("setup probe app: %w", err)
+	var probeApp sdkhook.App
+	if e.appFactory != nil {
+		probeApp, _, err = e.appFactory(dbm.NewMemDB(), nil)
+		if err != nil {
+			return fmt.Errorf("setup probe app: %w", err)
+		}
+	} else {
+		probeApp, err = initApp(cfg, gs.baseCfg, nil)
+		if err != nil {
+			return fmt.Errorf("setup probe app: %w", err)
+		}
 	}
 	instrument.InstrumentSTM(probeApp, sdkhook.NewSTMRunner(txCfg.TxDecoder(), probeApp.GetStoreKeys(), 4, rand.Int63()))
 
