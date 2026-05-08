@@ -375,6 +375,129 @@ func TestRun_OutOfKVStoreMutation_NoMutation_NoFinding(t *testing.T) {
 	require.Empty(t, result.Findings)
 }
 
+// ---------------------------------------------------------------------------
+// Test: Gas mismatch
+// ---------------------------------------------------------------------------
+
+func TestRun_GasMismatch(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	result, err := compare.Run(compare.Input{
+		Oracle: &gasFinalizer{oracle, []int64{1000, 2000}},
+		Probe:  &gasFinalizer{probe, []int64{1000, 9999}},
+		Block:  &abci.RequestFinalizeBlock{Height: 1},
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Divergence, result.Verdict)
+
+	var gasFindings []compare.Finding
+	for _, f := range result.Findings {
+		if f.Dimension == compare.DimGas {
+			gasFindings = append(gasFindings, f)
+		}
+	}
+	require.Len(t, gasFindings, 1, "only tx 1 has different gas")
+	require.Equal(t, 1, gasFindings[0].TxIndex)
+	require.Equal(t, "2000", gasFindings[0].Oracle)
+	require.Equal(t, "9999", gasFindings[0].Probe)
+}
+
+func TestRun_GasMatch(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	result, err := compare.Run(compare.Input{
+		Oracle: &gasFinalizer{oracle, []int64{1000}},
+		Probe:  &gasFinalizer{probe, []int64{1000}},
+		Block:  &abci.RequestFinalizeBlock{Height: 1},
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Match, result.Verdict)
+	require.Empty(t, result.Findings)
+}
+
+// ---------------------------------------------------------------------------
+// Test: Events mismatch
+// ---------------------------------------------------------------------------
+
+func TestRun_EventsMismatch(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	oracleEvents := [][]abci.Event{
+		{{Type: "transfer", Attributes: []abci.EventAttribute{{Key: "amount", Value: "100"}}}},
+	}
+	probeEvents := [][]abci.Event{
+		{{Type: "transfer", Attributes: []abci.EventAttribute{{Key: "amount", Value: "999"}}}},
+	}
+
+	result, err := compare.Run(compare.Input{
+		Oracle: &eventsFinalizer{oracle, oracleEvents},
+		Probe:  &eventsFinalizer{probe, probeEvents},
+		Block:  &abci.RequestFinalizeBlock{Height: 1},
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Divergence, result.Verdict)
+
+	var evtFindings []compare.Finding
+	for _, f := range result.Findings {
+		if f.Dimension == compare.DimEvents {
+			evtFindings = append(evtFindings, f)
+		}
+	}
+	require.Len(t, evtFindings, 1)
+	require.Equal(t, 0, evtFindings[0].TxIndex)
+	require.Contains(t, evtFindings[0].Oracle, "amount=100")
+	require.Contains(t, evtFindings[0].Probe, "amount=999")
+}
+
+func TestRun_EventsMatch(t *testing.T) {
+	oracle := newTestBaseApp(t)
+	probe := newTestBaseApp(t)
+
+	instrument.InstrumentApp(oracle, instrument.Options{Runner: instrument.RunnerSequential})
+
+	_, err := oracle.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+	_, err = probe.InitChain(&abci.RequestInitChain{})
+	require.NoError(t, err)
+
+	events := [][]abci.Event{
+		{{Type: "transfer", Attributes: []abci.EventAttribute{{Key: "amount", Value: "100"}}}},
+	}
+
+	result, err := compare.Run(compare.Input{
+		Oracle: &eventsFinalizer{oracle, events},
+		Probe:  &eventsFinalizer{probe, events},
+		Block:  &abci.RequestFinalizeBlock{Height: 1},
+	})
+	require.NoError(t, err)
+	require.Equal(t, compare.Match, result.Verdict)
+	require.Empty(t, result.Findings)
+}
+
 func TestRun_BlockContextMutation_GeneratesFinding(t *testing.T) {
 	tracker := compare.NewBlockContextTracker(map[string]string{"height": "10"})
 	tracker.SetCurrentTx(0)
