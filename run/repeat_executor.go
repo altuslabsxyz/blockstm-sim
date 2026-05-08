@@ -145,6 +145,15 @@ func (e *RepeatRunExecutor) RunBlock(block compare.BlockSpec, height int64) (*co
 		allFindings = append(allFindings, f2Findings...)
 	}
 
+	if _, cerr := e.oracle.Commit(); cerr != nil {
+		return nil, fmt.Errorf("oracle Commit: %w", cerr)
+	}
+	for i, p := range e.probes {
+		if _, cerr := p.Commit(); cerr != nil {
+			return nil, fmt.Errorf("probe[%d] Commit: %w", i, cerr)
+		}
+	}
+
 	result := &compare.Result{Height: height}
 	if len(allFindings) > 0 {
 		result.Verdict = compare.Divergence
