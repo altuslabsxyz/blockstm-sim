@@ -35,6 +35,7 @@ import (
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 	"github.com/altuslabsxyz/blockstm-sim/instrument"
 	"github.com/altuslabsxyz/blockstm-sim/sdkhook"
+	"github.com/altuslabsxyz/blockstm-sim/simharness"
 	"github.com/altuslabsxyz/blockstm-sim/tracker"
 )
 
@@ -270,6 +271,7 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		ProbeWriteSets:        probeObs,
 		OracleMutations:       oracleObs,
 		BlockContextMutations: blockCtxTracker,
+		NonDetProvider:        simharness.Provider(),
 		PostOracleHook: func() {
 			if extraPreProbeSetup != nil {
 				extraPreProbeSetup()
