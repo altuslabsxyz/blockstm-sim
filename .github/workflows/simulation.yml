@@ -95,9 +95,14 @@ jobs:
           cp go.sum go.internal.sum
           go mod edit -modfile=go.internal.mod -replace github.com/cosmos/cosmos-sdk="${PRIVATE_SDK_DIR}"
           go mod edit -modfile=go.internal.mod -replace cosmossdk.io/store="${PRIVATE_SDK_DIR}/store"
-          if [ -d "${PRIVATE_COMET_DIR}" ]; then
+          if [ -n "${PRIVATE_COMET_REPOSITORY}" ]; then
+            if [ ! -d "${PRIVATE_COMET_DIR}" ]; then
+              echo "::error::PRIVATE_COMET_REPOSITORY is set but ${PRIVATE_COMET_DIR} does not exist. Consensus source checkout may have been skipped."
+              exit 1
+            fi
             go mod edit -modfile=go.internal.mod -replace github.com/cometbft/cometbft="${PRIVATE_COMET_DIR}"
           fi
+          go mod tidy -modfile=go.internal.mod
 
       - name: Build simharness+canary binary
         working-directory: blockstm-sim
