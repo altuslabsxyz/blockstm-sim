@@ -22,6 +22,10 @@ type App interface {
 	// FinalizeBlock executes a block of transactions and returns the results.
 	FinalizeBlock(*abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error)
 
+	// Commit persists the current block state and advances LastBlockHeight.
+	// Must be called after each FinalizeBlock to allow the next block to proceed.
+	Commit() (*abci.ResponseCommit, error)
+
 	// SetLifecycleObserver wires an observer to receive block/tx lifecycle events.
 	// Pass compare.NoopLifecycleObserver{} to detach.
 	SetLifecycleObserver(compare.LifecycleObserver)

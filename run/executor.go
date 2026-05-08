@@ -279,8 +279,10 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 	}
 
 	var blockCtxTracker *compare.BlockContextTracker
+	var blockCtxMutations compare.BlockContextMutationProvider
 	if extraOracleBlockCtxTracker != nil {
 		blockCtxTracker = extraOracleBlockCtxTracker(height)
+		blockCtxMutations = blockCtxTracker
 	}
 
 	oracleTrackers := append([]compare.MutationTracker(nil), e.oracleTrackers...)
@@ -308,7 +310,7 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		OracleWriteSets:       oracleObs,
 		ProbeWriteSets:        probeObs,
 		OracleMutations:       oracleObs,
-		BlockContextMutations: blockCtxTracker,
+		BlockContextMutations: blockCtxMutations,
 		NonDetProvider:        simharness.Provider(),
 		PostOracleHook: func() {
 			if extraPreProbeSetup != nil {
@@ -332,6 +334,15 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 
 	if extraPostRunBlockHook != nil {
 		extraPostRunBlockHook()
+	}
+
+	if err == nil {
+		if _, cerr := e.oracle.Commit(); cerr != nil {
+			return nil, fmt.Errorf("oracle Commit: %w", cerr)
+		}
+		if _, cerr := e.probe.Commit(); cerr != nil {
+			return nil, fmt.Errorf("probe Commit: %w", cerr)
+		}
 	}
 
 	if err == nil {
