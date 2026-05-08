@@ -214,6 +214,67 @@ Strategies to reduce noise:
 
 ---
 
+## Wiring a Real Chain App via AppFactory
+
+By default, `FixtureExecutor` creates a minimal test app using
+`simtestutil.SetupWithConfiguration`. To test a real chain (e.g.
+`stablelabs/stable`), supply a custom `AppFactory` via `WithAppFactory`.
+
+The factory receives the backing DB, an optional `*client.TxConfig` to populate,
+and any additional DI capture targets. It must return the wrapped `sdkhook.App`,
+the raw app (for keeper discovery), and an error.
+
+```go
+//go:build sdk_hooks
+
+package blockstm
+
+import (
+    dbm "github.com/cosmos/cosmos-db"
+    "github.com/cosmos/cosmos-sdk/client"
+
+    abci "github.com/cometbft/cometbft/abci/types"
+
+    "github.com/altuslabsxyz/blockstm-sim/compare"
+    "github.com/altuslabsxyz/blockstm-sim/run"
+    "github.com/altuslabsxyz/blockstm-sim/sdkhook"
+
+    stableapp "github.com/stablelabs/stable/app"
+)
+
+// stableFactory creates a stable.App and initialises it from the fixture genesis.
+func stableFactory(genesis compare.GenesisSpec) run.AppFactory {
+    return func(db dbm.DB, txCfgOut *client.TxConfig, _ ...any) (sdkhook.App, any, error) {
+        app := stableapp.NewApp(logger, db, nil, true, appOpts, evmChainID)
+        if txCfgOut != nil {
+            *txCfgOut = app.TxConfig()
+        }
+        genState := buildGenesisFromSpec(genesis) // encode accounts + balances
+        _, err := app.InitChain(&abci.RequestInitChain{AppStateBytes: genState})
+        if err != nil {
+            return nil, nil, err
+        }
+        return sdkhook.WrapApp(app), app, nil
+    }
+}
+
+func TestBlockSTM(t *testing.T) {
+    genesis := compare.GenesisSpec{ /* load from fixture YAML */ }
+    executor := run.NewFixtureExecutor(run.WithAppFactory(stableFactory(genesis)))
+    stores, _ := compare.LoadCorpusStores("./corpus/fixtures")
+    rep := report.NewCLI(os.Stdout, os.Stderr)
+    cfg := run.Config{CorpusDir: "./corpus/fixtures", Probes: 1}
+    code := run.RunHarness(cfg, executor, stores, rep, os.Stderr)
+    require.Zero(t, code)
+}
+```
+
+> **Note**: `buildGenesisFromSpec` is chain-specific. It encodes the YAML
+> fixture's accounts and balances into the chain's native genesis JSON format
+> (bank module balances + auth module accounts).
+
+---
+
 ## Test Registration (Unit Tests)
 
 Integration tests that do not import the cmd package must register the hooks
