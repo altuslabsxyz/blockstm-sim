@@ -239,3 +239,47 @@ type mockMutationProvider struct {
 func (m *mockMutationProvider) TxMutations(txIndex int) []compare.MutationRecord {
 	return m.muts[txIndex]
 }
+
+// ---------------------------------------------------------------------------
+// Gas finalizer (injects GasUsed per tx)
+// ---------------------------------------------------------------------------
+
+type gasFinalizer struct {
+	compare.Finalizer
+	gasUsed []int64
+}
+
+func (f *gasFinalizer) FinalizeBlock(req *abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error) {
+	res, err := f.Finalizer.FinalizeBlock(req)
+	if err != nil {
+		return res, err
+	}
+	txResults := make([]*abci.ExecTxResult, len(f.gasUsed))
+	for i, gas := range f.gasUsed {
+		txResults[i] = &abci.ExecTxResult{GasUsed: gas}
+	}
+	res.TxResults = txResults
+	return res, nil
+}
+
+// ---------------------------------------------------------------------------
+// Events finalizer (injects Events per tx)
+// ---------------------------------------------------------------------------
+
+type eventsFinalizer struct {
+	compare.Finalizer
+	events [][]abci.Event
+}
+
+func (f *eventsFinalizer) FinalizeBlock(req *abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error) {
+	res, err := f.Finalizer.FinalizeBlock(req)
+	if err != nil {
+		return res, err
+	}
+	txResults := make([]*abci.ExecTxResult, len(f.events))
+	for i, evts := range f.events {
+		txResults[i] = &abci.ExecTxResult{Events: evts}
+	}
+	res.TxResults = txResults
+	return res, nil
+}

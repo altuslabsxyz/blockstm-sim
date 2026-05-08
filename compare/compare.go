@@ -64,6 +64,28 @@ func Run(input Input) (*Result, error) {
 		}
 	}
 
+	for i := 0; i < txCount; i++ {
+		if oracleRes.TxResults[i].GasUsed != probeRes.TxResults[i].GasUsed {
+			findings = append(findings, NewFinding(
+				height, DimGas, i, 0,
+				fmt.Sprintf("%d", oracleRes.TxResults[i].GasUsed),
+				fmt.Sprintf("%d", probeRes.TxResults[i].GasUsed),
+			))
+		}
+	}
+
+	for i := 0; i < txCount; i++ {
+		oEvents := FormatEvents(oracleRes.TxResults[i].Events)
+		pEvents := FormatEvents(probeRes.TxResults[i].Events)
+		if oEvents != pEvents {
+			findings = append(findings, NewFinding(
+				height, DimEvents, i, 0,
+				oEvents,
+				pEvents,
+			))
+		}
+	}
+
 	if input.OracleWriteSets != nil && input.ProbeWriteSets != nil {
 		for i := 0; i < txCount; i++ {
 			oWS := input.OracleWriteSets.TxWriteSet(i)
@@ -125,6 +147,23 @@ func EqualStrSlice(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// FormatEvents serializes a slice of ABCI events to a human-readable string.
+// Event order and attribute order are preserved; no sorting is applied.
+func FormatEvents(events []abci.Event) string {
+	if len(events) == 0 {
+		return "(none)"
+	}
+	parts := make([]string, len(events))
+	for i, e := range events {
+		attrs := make([]string, len(e.Attributes))
+		for j, a := range e.Attributes {
+			attrs[j] = a.Key + "=" + a.Value
+		}
+		parts[i] = e.Type + ":[" + strings.Join(attrs, ",") + "]"
+	}
+	return strings.Join(parts, ";")
 }
 
 // FormatWriteSet returns a human-readable summary of a write-set key list,
