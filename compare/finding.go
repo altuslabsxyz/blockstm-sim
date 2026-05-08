@@ -14,8 +14,9 @@ const (
 	DimWriteSet     Dimension = "write_set"
 	DimOutOfKVStore Dimension = "out_of_kvstore"
 	DimBlockContext Dimension = "block_context"
-	DimGas         Dimension = "gas"
-	DimEvents      Dimension = "events"
+	DimGas              Dimension = "gas"
+	DimEvents           Dimension = "events"
+	DimNonDeterministic Dimension = "non_deterministic"
 )
 
 type Finding struct {

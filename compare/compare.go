@@ -21,6 +21,7 @@ type Input struct {
 	ProbeWriteSets        WriteSetProvider
 	OracleMutations       MutationProvider
 	BlockContextMutations BlockContextMutationProvider
+	NonDetProvider        NonDetProvider
 	// PostOracleHook is called immediately after oracle FinalizeBlock succeeds,
 	// before the probe runs. Use this to capture oracle-side state that must be
 	// snapshotted after oracle execution but before any further state changes.
@@ -121,6 +122,16 @@ func Run(input Input) (*Result, error) {
 				height, DimBlockContext, m.WriterTx, 0,
 				fmt.Sprintf("field=%s;before=%s;readers=%s", m.Field, m.Before, joinInts(m.ReaderTxs)),
 				fmt.Sprintf("field=%s;after=%s;writer=tx%d", m.Field, m.After, m.WriterTx),
+			))
+		}
+	}
+
+	if input.NonDetProvider != nil {
+		for _, c := range input.NonDetProvider.NonDetCalls() {
+			findings = append(findings, NewFinding(
+				height, DimNonDeterministic, c.TxIndex, 0,
+				fmt.Sprintf("category=%s;call=%s", c.Category, c.CallSite),
+				fmt.Sprintf("category=%s;call=%s", c.Category, c.CallSite),
 			))
 		}
 	}
