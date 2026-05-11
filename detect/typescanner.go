@@ -1,9 +1,11 @@
 package detect
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -37,14 +39,15 @@ func (s *TypeScanner) ScanDir(root string) (*ScanResult, error) {
 		Mode: packages.NeedSyntax |
 			packages.NeedTypesInfo |
 			packages.NeedTypes |
-			packages.NeedFiles,
+			packages.NeedFiles |
+			packages.NeedImports, // required for cross-package type resolution
 		Dir:   absRoot,
 		Tests: false,
 	}
 
 	pkgs, err := packages.Load(cfg, "./...")
-	if err != nil || hasLoadErrors(pkgs) {
-		// Fall back to AST-only scanner when the module cannot be loaded.
+	if err != nil || hasLoadErrors(pkgs) || len(pkgs) == 0 {
+		fmt.Fprintf(os.Stderr, "warn: go/packages load failed for %s, falling back to AST-only analysis\n", root)
 		return NewScanner(s.rules).ScanDir(root)
 	}
 
@@ -76,7 +79,7 @@ func shouldSkipFile(path string) bool {
 	}
 	// Skip vendor and testutil directories.
 	for _, part := range strings.Split(filepath.ToSlash(path), "/") {
-		if part == "vendor" || part == "testutil" {
+		if part == "vendor" || part == "testutil" || part == "mock" {
 			return true
 		}
 	}

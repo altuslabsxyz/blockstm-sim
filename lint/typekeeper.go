@@ -1,9 +1,11 @@
 package lint
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -49,13 +51,15 @@ func (s *Scanner) ScanDirWithTypes(root string) (*LintResult, error) {
 		Mode: packages.NeedSyntax |
 			packages.NeedTypesInfo |
 			packages.NeedTypes |
-			packages.NeedFiles,
+			packages.NeedFiles |
+			packages.NeedImports, // required for cross-package type resolution
 		Dir:   absRoot,
 		Tests: false,
 	}
 
 	pkgs, err := packages.Load(cfg, "./...")
-	if err != nil || hasLintLoadErrors(pkgs) {
+	if err != nil || hasLintLoadErrors(pkgs) || len(pkgs) == 0 {
+		fmt.Fprintf(os.Stderr, "warn: go/packages load failed for %s, falling back to AST-only analysis\n", root)
 		return s.ScanDir(root)
 	}
 
@@ -129,7 +133,12 @@ func (s *Scanner) scanFileWithTypes(
 
 					if hasReceiver && !isConstructor(fn.Name.Name) {
 						if field := receiverField(lhs, receiverName); field != "" {
-							if !isTypeSafeField(lhs, typesInfo) && !isSafeField(field) {
+							// Extract the SelectorExpr (k.field) from the LHS —
+							// unwrapping IndexExpr chains like k.cache[key] — so
+							// isTypeSafeField sees the field's declared type, not
+							// the map element type.
+							sel := fieldSelectorFromLHS(lhs)
+							if !isTypeSafeField(sel, typesInfo) && !isSafeField(field) {
 								findings = append(findings, Finding{
 									Kind:   KindKeeperField,
 									File:   relPath,
@@ -161,7 +170,8 @@ func (s *Scanner) scanFileWithTypes(
 
 				if hasReceiver && !isConstructor(fn.Name.Name) {
 					if field := receiverField(node.X, receiverName); field != "" {
-						if !isTypeSafeField(node.X, typesInfo) && !isSafeField(field) {
+						sel := fieldSelectorFromLHS(node.X)
+						if !isTypeSafeField(sel, typesInfo) && !isSafeField(field) {
 							findings = append(findings, Finding{
 								Kind:   KindKeeperField,
 								File:   relPath,
@@ -193,8 +203,26 @@ func (s *Scanner) scanFileWithTypes(
 	return findings
 }
 
+// fieldSelectorFromLHS walks through IndexExpr chains to find the underlying
+// SelectorExpr (e.g., k.cache from k.cache[key]). Returns the original expr
+// when no SelectorExpr is found.
+func fieldSelectorFromLHS(expr ast.Expr) ast.Expr {
+	for {
+		switch e := expr.(type) {
+		case *ast.IndexExpr:
+			expr = e.X
+		case *ast.SelectorExpr:
+			return expr
+		default:
+			return expr
+		}
+	}
+}
+
 // isTypeSafeField returns true when the expression's type comes from a
 // KVStore-backed package, meaning the field is safe under BlockSTM.
+// expr should be the SelectorExpr for the field (k.field), not a raw LHS —
+// use fieldSelectorFromLHS to extract it from compound expressions.
 // When typesInfo is nil or the type is unresolved, returns false so the
 // name-based isSafeField() fallback applies.
 func isTypeSafeField(expr ast.Expr, typesInfo *types.Info) bool {
