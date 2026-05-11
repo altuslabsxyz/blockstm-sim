@@ -203,13 +203,16 @@ func (s *Scanner) scanFileWithTypes(
 	return findings
 }
 
-// fieldSelectorFromLHS walks through IndexExpr chains to find the underlying
-// SelectorExpr (e.g., k.cache from k.cache[key]). Returns the original expr
-// when no SelectorExpr is found.
+// fieldSelectorFromLHS walks through IndexExpr/IndexListExpr chains to find
+// the underlying SelectorExpr (e.g., k.cache from k.cache[key] or
+// k.cache[string, int64]). Returns the original expr when no SelectorExpr is
+// found.
 func fieldSelectorFromLHS(expr ast.Expr) ast.Expr {
 	for {
 		switch e := expr.(type) {
 		case *ast.IndexExpr:
+			expr = e.X
+		case *ast.IndexListExpr:
 			expr = e.X
 		case *ast.SelectorExpr:
 			return expr
