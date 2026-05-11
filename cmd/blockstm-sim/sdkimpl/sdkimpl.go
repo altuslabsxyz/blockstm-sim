@@ -16,6 +16,11 @@ import (
 	"github.com/altuslabsxyz/blockstm-sim/sdkhook"
 )
 
+// Compile-time guard: if the SDK fork adds a method to lifecycle.LifecycleObserver
+// that is not present in compare.LifecycleObserver, this line fails to compile,
+// catching the drift before it causes a runtime panic in SetLifecycleObserver.
+var _ lifecycle.LifecycleObserver = compare.NoopLifecycleObserver{}
+
 // appAdapter wraps *runtime.App to implement sdkhook.App.
 // It bridges compare.LifecycleObserver (blockstm-sim's type) and
 // lifecycle.LifecycleObserver (the SDK fork's type). Both interfaces have
