@@ -27,7 +27,7 @@ manually reviewed to confirm whether the field is KVStore-backed or not.`,
 			failOnFindings, _ := cmd.Flags().GetBool("fail-on-findings")
 
 			scanner := NewScanner()
-			result, err := scanner.ScanDir(sdkPath)
+			result, err := scanner.ScanDirWithTypes(sdkPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "lint: %v\n", err)
 				os.Exit(1)
