@@ -24,7 +24,7 @@ func NewCommand() *cobra.Command {
 			category, _ := cmd.Flags().GetString("category")
 			format, _ := cmd.Flags().GetString("format")
 
-			scanner := NewScanner(DefaultRules())
+			scanner := NewTypeScanner(DefaultRules())
 			result, err := scanner.ScanDir(sdkPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "scan: %v\n", err)
