@@ -148,17 +148,18 @@ func NewKeeper() *Keeper {
 // Plain functions (no receiver) — must NOT flag keeper_field
 // ---------------------------------------------------------------------------
 
-func TestScan_PlainFunction_NoKeeperField(t *testing.T) {
+func TestScan_PlainFunction_PkgVar(t *testing.T) {
 	src := `package keeper
 var counter int64
-func process(ctx sdk.Context) {
+func process() {
 	counter++
 }`
 	findings := scan(t, src)
-	// pkg_var finding expected, no keeper_field
-	for _, f := range findings {
-		require.NotEqual(t, lint.KindKeeperField, f.Kind)
-	}
+	// Non-method plain function: no receiver, so no keeper_field.
+	// pkg_var is still detected regardless of ctx.
+	require.Len(t, findings, 1)
+	require.Equal(t, lint.KindPkgVar, findings[0].Kind)
+	require.Equal(t, "counter", findings[0].Target)
 }
 
 // ---------------------------------------------------------------------------

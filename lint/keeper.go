@@ -63,7 +63,6 @@ func (s *Scanner) ScanFile(fset *token.FileSet, f *ast.File, relPath string) []F
 		}
 
 		receiverName, hasReceiver := receiverIdent(fn)
-		isContextMethod := hasContextParam(fn)
 
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			switch node := n.(type) {
@@ -89,7 +88,10 @@ func (s *Scanner) ScanFile(fset *token.FileSet, f *ast.File, relPath string) []F
 					}
 
 					// package-level variable: pkgVar = ...
-					if isContextMethod {
+					// Checked in all non-constructor methods for the same reason as
+					// keeper_field: helper functions without ctx can be called from
+					// context-bearing handlers and still cause BlockSTM races.
+					if !isConstructor(fn.Name.Name) {
 						if v := pkgVarTarget(lhs, pkgVars); v != "" {
 							findings = append(findings, Finding{
 								Kind:   KindPkgVar,
@@ -121,7 +123,7 @@ func (s *Scanner) ScanFile(fset *token.FileSet, f *ast.File, relPath string) []F
 				}
 
 				// pkgVar++
-				if isContextMethod {
+				if !isConstructor(fn.Name.Name) {
 					if v := pkgVarTarget(node.X, pkgVars); v != "" {
 						findings = append(findings, Finding{
 							Kind:   KindPkgVar,
@@ -154,38 +156,6 @@ func receiverIdent(fn *ast.FuncDecl) (string, bool) {
 	return field.Names[0].Name, true
 }
 
-// hasContextParam returns true when any parameter name contains "ctx" or any
-// parameter type name ends in "Context". This is a heuristic to identify
-// methods that execute within a transaction context.
-func hasContextParam(fn *ast.FuncDecl) bool {
-	if fn.Type.Params == nil {
-		return false
-	}
-	for _, field := range fn.Type.Params.List {
-		for _, name := range field.Names {
-			if strings.Contains(strings.ToLower(name.Name), "ctx") {
-				return true
-			}
-		}
-		if typeEndsWith(field.Type, "Context") {
-			return true
-		}
-	}
-	return false
-}
-
-// typeEndsWith checks if an ast.Expr type name ends with suffix.
-func typeEndsWith(expr ast.Expr, suffix string) bool {
-	switch t := expr.(type) {
-	case *ast.Ident:
-		return strings.HasSuffix(t.Name, suffix)
-	case *ast.SelectorExpr:
-		return strings.HasSuffix(t.Sel.Name, suffix)
-	case *ast.StarExpr:
-		return typeEndsWith(t.X, suffix)
-	}
-	return false
-}
 
 // receiverField returns the field name if expr is `receiverName.field` or
 // `receiverName.field[...]`. Returns "" otherwise.
