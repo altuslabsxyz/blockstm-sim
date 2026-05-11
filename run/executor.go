@@ -280,7 +280,7 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 	// RawTxs carries pre-signed bytes from SnapshotCorpus. When no TxSpecs
 	// were decoded (snapshot blocks have no fixture YAML), use RawTxs directly.
 	if len(txs) == 0 && len(block.RawTxs) > 0 {
-		txs = block.RawTxs
+		txs = append([][]byte(nil), block.RawTxs...)
 	}
 
 	var blockCtxTracker *compare.BlockContextTracker
@@ -351,9 +351,18 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 	}
 
 	if err == nil {
-		result.MsgKeys = make([]string, len(block.Txs))
-		for i, spec := range block.Txs {
-			result.MsgKeys[i] = spec.Msg
+		if len(block.Txs) > 0 {
+			result.MsgKeys = make([]string, len(block.Txs))
+			for i, spec := range block.Txs {
+				result.MsgKeys[i] = spec.Msg
+			}
+		} else {
+			// RawTxs path: no fixture TxSpecs, use "raw" as a placeholder so
+			// MsgKeys length matches the number of executed transactions.
+			result.MsgKeys = make([]string, len(txs))
+			for i := range result.MsgKeys {
+				result.MsgKeys[i] = "raw"
+			}
 		}
 	}
 
