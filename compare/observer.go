@@ -41,6 +41,13 @@ var _ LifecycleObserver = (*BlockObserver)(nil)
 var _ WriteSetProvider = (*BlockObserver)(nil)
 var _ MutationProvider = (*BlockObserver)(nil)
 
+// AddTxSetter registers an additional TxIndexSetter that receives OnTxStart
+// notifications. Use this to wire components (e.g. the nondet sink) that need
+// per-tx attribution but are not MutationTrackers.
+func (o *BlockObserver) AddTxSetter(s TxIndexSetter) {
+	o.txSetters = append(o.txSetters, s)
+}
+
 func NewBlockObserver(txCount int, trackers ...MutationTracker) *BlockObserver {
 	ws := make([]map[string]struct{}, txCount)
 	for i := range ws {

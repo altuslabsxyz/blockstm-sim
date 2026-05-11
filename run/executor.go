@@ -302,6 +302,11 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 
 	oracleObs := compare.NewBlockObserver(len(txs), oracleTrackers...)
 	probeObs := compare.NewBlockObserver(len(txs))
+	// Wire the nondet sink as a TxIndexSetter so nondet findings carry the
+	// correct tx attribution instead of always reporting TxIndex=-1.
+	if setter, ok := simharness.Provider().(compare.TxIndexSetter); ok {
+		oracleObs.AddTxSetter(setter)
+	}
 	e.oracle.SetLifecycleObserver(oracleObs)
 	e.probe.SetLifecycleObserver(probeObs)
 
