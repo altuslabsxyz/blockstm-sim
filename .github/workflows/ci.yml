@@ -39,3 +39,32 @@ jobs:
 
       - name: Test
         run: go test ./...
+
+  keeper-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+
+      - name: Build blockstm-sim
+        run: go build -o build/blockstm-sim ./cmd/blockstm-sim
+
+      - name: Run keeper lint (canary — known violations)
+        run: |
+          ./build/blockstm-sim lint \
+            --sdk-path ./x/simcanary \
+            --format json \
+            > lint-report.json 2>&1 || true
+          echo "keeper-lint complete. findings:"
+          cat lint-report.json
+
+      - name: Upload lint report
+        uses: actions/upload-artifact@v4
+        with:
+          name: keeper-lint-report
+          path: lint-report.json
+          if-no-files-found: warn
