@@ -11,6 +11,84 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// ---------------------------------------------------------------------------
+// Map iteration heuristic
+// ---------------------------------------------------------------------------
+
+func TestScanFile_MapIter_Detected(t *testing.T) {
+	src := `package keeper
+type Keeper struct{ cache map[string]int64 }
+func (k *Keeper) Process(ctx sdk.Context) {
+	for key, val := range k.cache {
+		_ = key
+		_ = val
+	}
+}`
+	findings := scanSource(t, src, "x/bank/keeper/keeper.go")
+	var mapFindings []Finding
+	for _, f := range findings {
+		if f.Category == CatMapIter {
+			mapFindings = append(mapFindings, f)
+		}
+	}
+	require.Len(t, mapFindings, 1)
+	require.Equal(t, "range cache", mapFindings[0].Call)
+	require.Equal(t, "Process", mapFindings[0].FuncName)
+}
+
+func TestScanFile_MapIter_SliceNotFlagged(t *testing.T) {
+	src := `package keeper
+func Process(items []string) {
+	for _, item := range items {
+		_ = item
+	}
+}`
+	findings := scanSource(t, src, "x/bank/keeper/keeper.go")
+	for _, f := range findings {
+		require.NotEqual(t, CatMapIter, f.Category, "slice range must not be flagged")
+	}
+}
+
+func TestScanFile_MapIter_RegistryFlagged(t *testing.T) {
+	src := `package keeper
+var moduleRegistry map[string]bool
+func init() {
+	for mod := range moduleRegistry {
+		_ = mod
+	}
+}`
+	findings := scanSource(t, src, "x/bank/keeper/keeper.go")
+	var mapFindings []Finding
+	for _, f := range findings {
+		if f.Category == CatMapIter {
+			mapFindings = append(mapFindings, f)
+		}
+	}
+	require.Len(t, mapFindings, 1)
+	require.Equal(t, "range moduleRegistry", mapFindings[0].Call)
+}
+
+// ---------------------------------------------------------------------------
+// Pointer address heuristic
+// ---------------------------------------------------------------------------
+
+func TestScanFile_Pointer_ReflectValueOf(t *testing.T) {
+	src := `package keeper
+import "reflect"
+func leakAddr(x interface{}) uintptr {
+	return reflect.ValueOf(x).Pointer()
+}`
+	findings := scanSource(t, src, "x/bank/keeper/keeper.go")
+	var ptrFindings []Finding
+	for _, f := range findings {
+		if f.Category == CatPointer {
+			ptrFindings = append(ptrFindings, f)
+		}
+	}
+	require.Len(t, ptrFindings, 1)
+	require.Equal(t, "reflect.ValueOf", ptrFindings[0].Call)
+}
+
 func TestScanFile_TimeNow(t *testing.T) {
 	src := `package foo
 
