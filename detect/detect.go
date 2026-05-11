@@ -5,9 +5,11 @@ import "strings"
 type Category string
 
 const (
-	CatTime Category = "time"
-	CatRand Category = "rand"
-	CatIO   Category = "io"
+	CatTime    Category = "time"
+	CatRand    Category = "rand"
+	CatIO      Category = "io"
+	CatMapIter Category = "map_iter"  // map range where iteration order is observable
+	CatPointer Category = "pointer"   // pointer address exposed in output
 )
 
 type Finding struct {

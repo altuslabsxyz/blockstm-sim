@@ -43,6 +43,19 @@ func DefaultRules() RuleSet {
 			FuncNames:  []string{"Get", "Post", "Head", "NewRequest"},
 			Category:   CatIO,
 		},
+		// Pointer address exposure: reflect.ValueOf(x).Pointer() makes the memory
+		// address of x observable, causing non-determinism across runs.
+		{
+			ImportPath: "reflect",
+			FuncNames:  []string{"ValueOf"},
+			Category:   CatPointer,
+		},
+		// runtime.Noescape / unsafe pointer-to-uintptr conversions expose addresses.
+		{
+			ImportPath: "runtime",
+			FuncNames:  []string{"Noescape"},
+			Category:   CatPointer,
+		},
 	}
 }
 

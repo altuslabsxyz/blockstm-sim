@@ -66,6 +66,7 @@ func (s *Scanner) ScanFile(fset *token.FileSet, f *ast.File, relPath string) []F
 		switch node := n.(type) {
 		case *ast.FuncDecl:
 			enclosingFunc = node.Name.Name
+
 		case *ast.CallExpr:
 			sel, ok := node.Fun.(*ast.SelectorExpr)
 			if !ok {
@@ -92,11 +93,53 @@ func (s *Scanner) ScanFile(fset *token.FileSet, f *ast.File, relPath string) []F
 				Call:     importPath + "." + sel.Sel.Name,
 				Module:   module,
 			})
+
+		case *ast.RangeStmt:
+			// Heuristic: flag range over variables whose name suggests a map.
+			// Go maps have non-deterministic iteration order, which can cause
+			// non-determinism when the result flows to state writes or events.
+			if name := mapLikeName(node.X); name != "" {
+				pos := fset.Position(node.Pos())
+				findings = append(findings, Finding{
+					Category: CatMapIter,
+					File:     relPath,
+					Line:     pos.Line,
+					FuncName: enclosingFunc,
+					Call:     "range " + name,
+					Module:   module,
+				})
+			}
 		}
 		return true
 	})
 
 	return findings
+}
+
+// mapLikeName returns the name of the expression being ranged over when it
+// heuristically looks like a Go map. Returns "" for slices, channels, and
+// other non-map expressions.
+//
+// Heuristic: the variable or field name contains a map-suggestive substring.
+// This produces false positives (e.g. a slice named "indexMap") but the PRD
+// explicitly accepts heuristic findings for this category.
+func mapLikeName(expr ast.Expr) string {
+	var name string
+	switch e := expr.(type) {
+	case *ast.Ident:
+		name = e.Name
+	case *ast.SelectorExpr:
+		name = e.Sel.Name
+	default:
+		return ""
+	}
+	lower := strings.ToLower(name)
+	for _, kw := range []string{"map", "cache", "index", "registry", "table", "store", "dict", "lookup"} {
+		if strings.Contains(lower, kw) {
+			return name
+		}
+	}
+	return ""
 }
 
 func buildAliasMap(f *ast.File) map[string]string {
