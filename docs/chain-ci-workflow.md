@@ -309,19 +309,20 @@ jobs:
 
 ---
 
-## Prerequisites checklist
+## Prerequisites
 
-Before this workflow can run end-to-end:
+The SDK fork must expose the following on `*App` before this workflow runs:
 
-| Item | Status | Issue |
-|---|---|---|
-| `LifecycleObserver` in SDK fork | In Review | PLA-47 |
-| Hook fire points in BaseApp | In Review | PLA-48 |
-| `SetLifecycleObserver` / `UnsetBlockSTMTxRunner` | In Review | PLA-49 |
-| `CacheMultiStoreWithVersion` (snapshot corpus) | In Review | PLA-54 |
-| `PerturbHook` (F2 repeat-determinism) | In Review | PLA-55 |
-| `buildGenesisFromSpec` implementation | — | PLA-81 |
+- `SetLifecycleObserver(LifecycleObserver)` — wires the block/tx lifecycle observer
+- `UnsetBlockSTMTxRunner()` — reverts to sequential execution (oracle mode)
+- `SetBlockSTMTxRunner(TxRunner)` — installs the parallel runner (probe mode)
+- `SetDisableBlockGasMeter(bool)` — disables gas metering for simulation runs
+- `GetStoreKeys() []StoreKey` — enumerates all multistore keys
 
-The fixture corpus test (F1 comparison only, no snapshot) works once
-PLA-47/48/49 are merged. PLA-54/55 are required only for snapshot replay
-and scheduler perturbation.
+The fixture corpus test (F1 comparison only) works with the above.
+Snapshot replay additionally requires `CacheMultiStoreWithVersion` on the
+multistore, and scheduler perturbation requires a `PerturbHook` on the
+BlockSTM scheduler.
+
+`buildGenesisFromSpec` must be implemented before the test passes with real
+bank-send transactions.
