@@ -153,3 +153,25 @@ func TestBlockObserver_TxIndexSetter_CalledOnStart(t *testing.T) {
 	obs.OnTxStart(2)
 	require.Equal(t, 2, setter.currentTx)
 }
+
+// fakeTxSetter is a TxIndexSetter that is NOT a MutationTracker, exercising the
+// AddTxSetter path rather than the constructor's type-assertion loop.
+type fakeTxSetter struct {
+	currentTx int
+}
+
+func (f *fakeTxSetter) SetCurrentTx(txIndex int) { f.currentTx = txIndex }
+
+var _ compare.TxIndexSetter = (*fakeTxSetter)(nil)
+
+func TestBlockObserver_AddTxSetter_CalledOnStart(t *testing.T) {
+	setter := &fakeTxSetter{}
+	obs := compare.NewBlockObserver(3) // no trackers — AddTxSetter is the only registration path
+	obs.AddTxSetter(setter)
+
+	obs.OnTxStart(1)
+	require.Equal(t, 1, setter.currentTx)
+
+	obs.OnTxStart(2)
+	require.Equal(t, 2, setter.currentTx)
+}
