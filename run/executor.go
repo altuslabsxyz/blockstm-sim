@@ -277,6 +277,11 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 		}
 		txs = append(txs, txBytes)
 	}
+	// RawTxs carries pre-signed bytes from SnapshotCorpus. When no TxSpecs
+	// were decoded (snapshot blocks have no fixture YAML), use RawTxs directly.
+	if len(txs) == 0 && len(block.RawTxs) > 0 {
+		txs = block.RawTxs
+	}
 
 	var blockCtxTracker *compare.BlockContextTracker
 	var blockCtxMutations compare.BlockContextMutationProvider

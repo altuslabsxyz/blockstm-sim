@@ -98,6 +98,7 @@ func (t *BlockContextTracker) WriteField(name, value string) {
 		ReaderTxs: readers,
 	})
 	field.value = value
+	field.readers = nil // reset so the next mutation records only post-write readers
 	t.fields[name] = field
 }
 
