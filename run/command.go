@@ -34,8 +34,7 @@ func NewCommand() *cobra.Command {
 
 			stores, err := compare.LoadCorpusStores(corpus)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "load corpus: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("load corpus: %w", err)
 			}
 
 			var rep report.Reporter
@@ -56,7 +55,7 @@ func NewCommand() *cobra.Command {
 
 			code := RunHarness(cfg, newExecutorFn(probes), stores, rep, os.Stderr)
 			if code != 0 {
-				os.Exit(code)
+				return fmt.Errorf("harness exited with code %d", code)
 			}
 			return nil
 		},

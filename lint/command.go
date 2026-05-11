@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 
+
 	"github.com/spf13/cobra"
 )
 
@@ -29,8 +30,7 @@ manually reviewed to confirm whether the field is KVStore-backed or not.`,
 			scanner := NewScanner()
 			result, err := scanner.ScanDirWithTypes(sdkPath)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "lint: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("lint: %w", err)
 			}
 
 			if kind != "" {
@@ -60,7 +60,7 @@ manually reviewed to confirm whether the field is KVStore-backed or not.`,
 			}
 
 			if failOnFindings && len(result.Findings) > 0 {
-				os.Exit(1)
+				return fmt.Errorf("%d finding(s) detected", len(result.Findings))
 			}
 			return nil
 		},

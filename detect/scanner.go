@@ -60,12 +60,29 @@ func (s *Scanner) ScanFile(fset *token.FileSet, f *ast.File, relPath string) []F
 	module := ModuleFromPath(relPath)
 
 	var findings []Finding
-	var enclosingFunc string
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		findings = append(findings, s.scanBody(fset, fn.Body, fn.Name.Name, relPath, module, aliases)...)
+	}
+	return findings
+}
 
-	ast.Inspect(f, func(n ast.Node) bool {
+// scanBody walks a function body and reports findings, recursing into closures
+// with their own name so that FuncName in each Finding accurately reflects the
+// enclosing function or closure rather than the last seen FuncDecl.
+func (s *Scanner) scanBody(fset *token.FileSet, body ast.Node, funcName, relPath, module string, aliases map[string]string) []Finding {
+	var findings []Finding
+
+	ast.Inspect(body, func(n ast.Node) bool {
 		switch node := n.(type) {
-		case *ast.FuncDecl:
-			enclosingFunc = node.Name.Name
+		case *ast.FuncLit:
+			// Process each closure separately so findings inside it report
+			// "outerFunc.closure" rather than the outer function's name.
+			findings = append(findings, s.scanBody(fset, node.Body, funcName+".closure", relPath, module, aliases)...)
+			return false // Inspect must not recurse into this subtree again
 
 		case *ast.CallExpr:
 			sel, ok := node.Fun.(*ast.SelectorExpr)
@@ -89,22 +106,19 @@ func (s *Scanner) ScanFile(fset *token.FileSet, f *ast.File, relPath string) []F
 				Category: cat,
 				File:     relPath,
 				Line:     pos.Line,
-				FuncName: enclosingFunc,
+				FuncName: funcName,
 				Call:     importPath + "." + sel.Sel.Name,
 				Module:   module,
 			})
 
 		case *ast.RangeStmt:
-			// Heuristic: flag range over variables whose name suggests a map.
-			// Go maps have non-deterministic iteration order, which can cause
-			// non-determinism when the result flows to state writes or events.
 			if name := mapLikeName(node.X); name != "" {
 				pos := fset.Position(node.Pos())
 				findings = append(findings, Finding{
 					Category: CatMapIter,
 					File:     relPath,
 					Line:     pos.Line,
-					FuncName: enclosingFunc,
+					FuncName: funcName,
 					Call:     "range " + name,
 					Module:   module,
 				})
