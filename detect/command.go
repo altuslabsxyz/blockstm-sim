@@ -27,8 +27,7 @@ func NewCommand() *cobra.Command {
 			scanner := NewTypeScanner(DefaultRules())
 			result, err := scanner.ScanDir(sdkPath)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "scan: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("scan: %w", err)
 			}
 
 			if category != "" {
@@ -66,7 +65,7 @@ func NewCommand() *cobra.Command {
 			rep.Footer(result, sdkPath)
 
 			if len(result.Findings) > 0 {
-				os.Exit(1)
+				return fmt.Errorf("%d finding(s) detected", len(result.Findings))
 			}
 			return nil
 		},

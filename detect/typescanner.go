@@ -108,12 +108,31 @@ func scanFileWithTypes(
 	module := ModuleFromPath(relPath)
 
 	var findings []Finding
-	var enclosingFunc string
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		findings = append(findings, scanBodyWithTypes(fset, fn.Body, fn.Name.Name, relPath, module, idx, aliases, typesInfo)...)
+	}
+	return findings
+}
 
-	ast.Inspect(f, func(n ast.Node) bool {
+func scanBodyWithTypes(
+	fset *token.FileSet,
+	body ast.Node,
+	funcName, relPath, module string,
+	idx *ruleIndex,
+	aliases map[string]string,
+	typesInfo *types.Info,
+) []Finding {
+	var findings []Finding
+
+	ast.Inspect(body, func(n ast.Node) bool {
 		switch node := n.(type) {
-		case *ast.FuncDecl:
-			enclosingFunc = node.Name.Name
+		case *ast.FuncLit:
+			findings = append(findings, scanBodyWithTypes(fset, node.Body, funcName+".closure", relPath, module, idx, aliases, typesInfo)...)
+			return false
 
 		case *ast.CallExpr:
 			sel, ok := node.Fun.(*ast.SelectorExpr)
@@ -137,7 +156,7 @@ func scanFileWithTypes(
 				Category: cat,
 				File:     relPath,
 				Line:     pos.Line,
-				FuncName: enclosingFunc,
+				FuncName: funcName,
 				Call:     importPath + "." + sel.Sel.Name,
 				Module:   module,
 			})
@@ -153,7 +172,7 @@ func scanFileWithTypes(
 					Category: CatMapIter,
 					File:     relPath,
 					Line:     pos.Line,
-					FuncName: enclosingFunc,
+					FuncName: funcName,
 					Call:     "range " + name,
 					Module:   module,
 				})
