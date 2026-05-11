@@ -7,6 +7,7 @@ import (
 
 	"github.com/altuslabsxyz/blockstm-sim/cmd/extract"
 	"github.com/altuslabsxyz/blockstm-sim/detect"
+	"github.com/altuslabsxyz/blockstm-sim/lint"
 	"github.com/altuslabsxyz/blockstm-sim/run"
 	"github.com/altuslabsxyz/blockstm-sim/version"
 
@@ -28,6 +29,7 @@ func main() {
 	rootCmd.AddCommand(run.NewCommand())
 	rootCmd.AddCommand(extract.NewCommand())
 	rootCmd.AddCommand(detect.NewCommand())
+	rootCmd.AddCommand(lint.NewCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
