@@ -3,6 +3,7 @@ package detect
 import (
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"os"
@@ -46,7 +47,7 @@ func (s *TypeScanner) ScanDir(root string) (*ScanResult, error) {
 	}
 
 	pkgs, err := packages.Load(cfg, "./...")
-	if err != nil || hasLoadErrors(pkgs) || len(pkgs) == 0 {
+	if err != nil || len(pkgs) == 0 {
 		fmt.Fprintf(os.Stderr, "warn: go/packages load failed for %s, falling back to AST-only analysis\n", root)
 		return NewScanner(s.rules).ScanDir(root)
 	}
@@ -55,18 +56,47 @@ func (s *TypeScanner) ScanDir(root string) (*ScanResult, error) {
 	result := &ScanResult{}
 
 	for _, pkg := range pkgs {
-		for _, f := range pkg.Syntax {
-			filename := pkg.Fset.File(f.Pos()).Name()
-			if shouldSkipFile(filename) {
-				continue
+		typesInfo := pkg.TypesInfo
+		if len(pkg.Errors) > 0 {
+			for _, e := range pkg.Errors {
+				fmt.Fprintf(os.Stderr, "warn: go/packages: %s: %v, using AST-only for this package\n", pkg.PkgPath, e)
 			}
-			rel, err := filepath.Rel(absRoot, filename)
-			if err != nil {
-				rel = filename
+			typesInfo = nil
+		}
+
+		if len(pkg.Syntax) > 0 {
+			for _, f := range pkg.Syntax {
+				filename := pkg.Fset.File(f.Pos()).Name()
+				if shouldSkipFile(filename) {
+					continue
+				}
+				rel, err := filepath.Rel(absRoot, filename)
+				if err != nil {
+					rel = filename
+				}
+				result.Files++
+				result.Findings = append(result.Findings,
+					scanFileWithTypes(pkg.Fset, f, rel, idx, typesInfo)...)
 			}
-			result.Files++
-			result.Findings = append(result.Findings,
-				scanFileWithTypes(pkg.Fset, f, rel, idx, pkg.TypesInfo)...)
+		} else if len(pkg.Errors) > 0 {
+			// pkg.Syntax unavailable; re-parse source files for AST-only analysis.
+			for _, filename := range pkg.GoFiles {
+				if shouldSkipFile(filename) {
+					continue
+				}
+				rel, err := filepath.Rel(absRoot, filename)
+				if err != nil {
+					rel = filename
+				}
+				fset := token.NewFileSet()
+				f, parseErr := parser.ParseFile(fset, filename, nil, 0)
+				if parseErr != nil {
+					continue
+				}
+				result.Files++
+				result.Findings = append(result.Findings,
+					scanFileWithTypes(fset, f, rel, idx, nil)...)
+			}
 		}
 	}
 	return result, nil
@@ -86,14 +116,6 @@ func shouldSkipFile(path string) bool {
 	return false
 }
 
-func hasLoadErrors(pkgs []*packages.Package) bool {
-	for _, pkg := range pkgs {
-		if len(pkg.Errors) > 0 {
-			return true
-		}
-	}
-	return false
-}
 
 // scanFileWithTypes is like Scanner.ScanFile but uses typesInfo for
 // type-accurate RangeStmt detection.

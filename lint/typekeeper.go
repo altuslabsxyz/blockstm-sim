@@ -3,6 +3,7 @@ package lint
 import (
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"os"
@@ -58,25 +59,53 @@ func (s *Scanner) ScanDirWithTypes(root string) (*LintResult, error) {
 	}
 
 	pkgs, err := packages.Load(cfg, "./...")
-	if err != nil || hasLintLoadErrors(pkgs) || len(pkgs) == 0 {
+	if err != nil || len(pkgs) == 0 {
 		fmt.Fprintf(os.Stderr, "warn: go/packages load failed for %s, falling back to AST-only analysis\n", root)
 		return s.ScanDir(root)
 	}
 
 	result := &LintResult{}
 	for _, pkg := range pkgs {
-		for _, f := range pkg.Syntax {
-			filename := pkg.Fset.File(f.Pos()).Name()
-			if shouldSkipLintFile(filename) {
-				continue
+		typesInfo := pkg.TypesInfo
+		if len(pkg.Errors) > 0 {
+			for _, e := range pkg.Errors {
+				fmt.Fprintf(os.Stderr, "warn: go/packages: %s: %v, using AST-only for this package\n", pkg.PkgPath, e)
 			}
-			rel, err := filepath.Rel(absRoot, filename)
-			if err != nil {
-				rel = filename
+			typesInfo = nil
+		}
+
+		if len(pkg.Syntax) > 0 {
+			for _, f := range pkg.Syntax {
+				filename := pkg.Fset.File(f.Pos()).Name()
+				if shouldSkipLintFile(filename) {
+					continue
+				}
+				rel, err := filepath.Rel(absRoot, filename)
+				if err != nil {
+					rel = filename
+				}
+				result.Files++
+				result.Findings = append(result.Findings,
+					s.scanFileWithTypes(pkg.Fset, f, rel, typesInfo)...)
 			}
-			result.Files++
-			result.Findings = append(result.Findings,
-				s.scanFileWithTypes(pkg.Fset, f, rel, pkg.TypesInfo)...)
+		} else if len(pkg.Errors) > 0 {
+			// pkg.Syntax unavailable; re-parse source files for AST-only analysis.
+			for _, filename := range pkg.GoFiles {
+				if shouldSkipLintFile(filename) {
+					continue
+				}
+				rel, err := filepath.Rel(absRoot, filename)
+				if err != nil {
+					rel = filename
+				}
+				fset := token.NewFileSet()
+				f, parseErr := parser.ParseFile(fset, filename, nil, 0)
+				if parseErr != nil {
+					continue
+				}
+				result.Files++
+				result.Findings = append(result.Findings, s.ScanFile(fset, f, rel)...)
+			}
 		}
 	}
 	return result, nil
@@ -95,14 +124,6 @@ func shouldSkipLintFile(path string) bool {
 	return false
 }
 
-func hasLintLoadErrors(pkgs []*packages.Package) bool {
-	for _, pkg := range pkgs {
-		if len(pkg.Errors) > 0 {
-			return true
-		}
-	}
-	return false
-}
 
 // scanFileWithTypes is like ScanFile but uses typesInfo for type-accurate
 // keeper field classification.

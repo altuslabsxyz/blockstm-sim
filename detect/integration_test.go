@@ -2,6 +2,7 @@ package detect
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -154,4 +155,41 @@ func DoWork() {
 	require.Contains(t, out, "[time]")
 	require.Contains(t, out, "time.Now")
 	require.Contains(t, out, "1 findings / 1 time / 0 rand / 0 io")
+}
+
+// TestTypeScannerScanDir_PartialLoadError verifies that a single package load
+// error does not cause a total fallback to AST-only analysis for all packages.
+//
+// The "good" package ranges over a []string named indexMap. The name heuristic
+// (AST-only) fires on "indexMap" because it contains "map". The type-accurate
+// path correctly identifies it as a slice and produces no finding. If the bug
+// regresses (total fallback), CatMapIter appears and the assertion fails.
+func TestTypeScannerScanDir_PartialLoadError(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module testmod\n\ngo 1.21\n"), 0o644))
+
+	// good package: type-accurate sees []string, suppresses the false-positive finding
+	writeFile(t, filepath.Join(dir, "good", "good.go"), `package good
+
+func F(indexMap []string) {
+	for _, v := range indexMap {
+		_ = v
+	}
+}
+`)
+
+	// bad package: parses fine but fails type-checking
+	writeFile(t, filepath.Join(dir, "bad", "bad.go"), `package bad
+
+var x int = "string causes a type error"
+`)
+
+	ts := NewTypeScanner(DefaultRules())
+	result, err := ts.ScanDir(dir)
+	require.NoError(t, err)
+
+	for _, f := range result.Findings {
+		require.NotEqual(t, CatMapIter, f.Category,
+			"indexMap is a []string; type-accurate scanner must not flag it (got finding: %+v)", f)
+	}
 }
