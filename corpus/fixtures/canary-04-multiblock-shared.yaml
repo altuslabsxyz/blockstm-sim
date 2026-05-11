@@ -15,6 +15,15 @@ blocks:
         value: 42
         gas: 200000
   - txs:
+      # tx1 updates the shared map value in block 2.
+      # tx2 concurrently reads and writes to KVStore based on the shared map.
+      # Under BlockSTM parallel execution, tx2 may read the stale value from
+      # block 1 (42) before tx1 overwrites it (99), causing AppHash divergence.
+      - signer: alice
+        msg: canary-map-set
+        key: "k"
+        value: 99
+        gas: 200000
       - signer: bob
         msg: canary-map-read-write
         key: "k"
