@@ -263,8 +263,14 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 	}
 
 	// Populate generic reflect-based trackers for all discovered modules/keepers.
+	// Skip trackers whose package prefix is in the deny list (e.g. upgrade module
+	// whose downgradeVerified field transitions deterministically on every run).
 	for _, mod := range sdkhook.DiscoverKeepers(rawOracleApp) {
-		e.oracleTrackers = append(e.oracleTrackers, tracker.New(mod))
+		t := tracker.New(mod)
+		if tracker.ShouldSkipTracker(t.TrackerName()) {
+			continue
+		}
+		e.oracleTrackers = append(e.oracleTrackers, t)
 	}
 
 	var probeApp sdkhook.App

@@ -74,7 +74,11 @@ func (e *SnapshotExecutor) InitFromState(preStateDB dbm.DB) error {
 		txCfg.TxDecoder(), oracleApp.GetStoreKeys(), 1, 0,
 	))
 	for _, mod := range sdkhook.DiscoverKeepers(rawOracleApp) {
-		e.oracleTrackers = append(e.oracleTrackers, tracker.New(mod))
+		t := tracker.New(mod)
+		if tracker.ShouldSkipTracker(t.TrackerName()) {
+			continue
+		}
+		e.oracleTrackers = append(e.oracleTrackers, t)
 	}
 
 	// Probe — backed by a separate MemDB so it has independent state.
