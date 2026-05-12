@@ -15,6 +15,14 @@ func Register(key string, e Entry) {
 	global[key] = e
 }
 
+// ClearRegistry removes all registered entries.
+// Intended for use in tests only.
+func ClearRegistry() {
+	globalMu.Lock()
+	defer globalMu.Unlock()
+	global = map[string]Entry{}
+}
+
 // Registered returns a snapshot copy of the global registry.
 func Registered() map[string]Entry {
 	globalMu.RLock()
