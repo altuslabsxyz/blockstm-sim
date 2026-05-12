@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"reflect"
 	"sort"
 	"sync"
@@ -21,8 +22,9 @@ var _ compare.MutationTracker = (*KeeperReflectTracker)(nil)
 // It snapshots the mutable, non-KVStore fields of any keeper or module instance,
 // detecting out-of-KVStore state changes without any marker interface on the target.
 type KeeperReflectTracker struct {
-	name string
-	obj  any
+	name        string
+	obj         any
+	depthWarned bool // emits at most one maxDepth warning per tracker instance
 }
 
 // New wraps any keeper or module instance. The tracker name is derived from
@@ -45,7 +47,7 @@ func (t *KeeperReflectTracker) SnapshotOutOfKVStoreState() []byte {
 	v := reflect.ValueOf(t.obj)
 	visited := make(map[uintptr]bool)
 	var buf bytes.Buffer
-	snapshotVal(v, &buf, visited, 0)
+	snapshotVal(v, &buf, visited, 0, t)
 	if buf.Len() == 0 {
 		return nil
 	}
@@ -55,8 +57,12 @@ func (t *KeeperReflectTracker) SnapshotOutOfKVStoreState() []byte {
 // maxDepth limits recursion to guard against unexpectedly deep object graphs.
 const maxDepth = 8
 
-func snapshotVal(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int) {
+func snapshotVal(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int, t *KeeperReflectTracker) {
 	if depth > maxDepth {
+		if t != nil && !t.depthWarned {
+			t.depthWarned = true
+			log.Printf("WARN: tracker %s: field depth exceeds %d; mutations in deeply nested structs will not be detected", t.name, maxDepth)
+		}
 		return
 	}
 	switch v.Kind() {
@@ -69,22 +75,22 @@ func snapshotVal(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, d
 			return
 		}
 		visited[ptr] = true
-		snapshotVal(v.Elem(), buf, visited, depth+1)
+		snapshotVal(v.Elem(), buf, visited, depth+1, t)
 
 	case reflect.Struct:
-		snapshotStruct(v, buf, visited, depth)
+		snapshotStruct(v, buf, visited, depth, t)
 
 	case reflect.Map:
 		if v.IsNil() {
 			return
 		}
-		snapshotMap(v, buf, visited, depth)
+		snapshotMap(v, buf, visited, depth, t)
 
 	case reflect.Slice:
 		if v.IsNil() {
 			return
 		}
-		snapshotSlice(v, buf, visited, depth)
+		snapshotSlice(v, buf, visited, depth, t)
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		writeUint64(buf, uint64(v.Int()))
@@ -111,22 +117,22 @@ var (
 	rwMutexType = reflect.TypeOf(sync.RWMutex{})
 )
 
-func snapshotStruct(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int) {
-	t := v.Type()
-	if t == mutexType || t == rwMutexType {
+func snapshotStruct(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int, trk *KeeperReflectTracker) {
+	typ := v.Type()
+	if typ == mutexType || typ == rwMutexType {
 		return
 	}
 
 	// Interface-boxed or otherwise non-addressable structs must be copied to
 	// heap before their unexported fields can be accessed via unsafe.
 	if !v.CanAddr() {
-		ptr := reflect.New(t)
+		ptr := reflect.New(typ)
 		ptr.Elem().Set(v)
 		v = ptr.Elem()
 	}
 
 	for i := 0; i < v.NumField(); i++ {
-		f := t.Field(i)
+		f := typ.Field(i)
 		fv := v.Field(i)
 
 		if shouldSkipField(f) {
@@ -139,7 +145,7 @@ func snapshotStruct(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool
 		}
 
 		fmt.Fprintf(buf, "[%s]", f.Name)
-		snapshotVal(accessible, buf, visited, depth+1)
+		snapshotVal(accessible, buf, visited, depth+1, trk)
 	}
 }
 
@@ -154,7 +160,7 @@ func makeAccessible(v reflect.Value) reflect.Value {
 	return reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem()
 }
 
-func snapshotMap(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int) {
+func snapshotMap(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int, t *KeeperReflectTracker) {
 	keys := v.MapKeys()
 	strs := make([]string, len(keys))
 	keyByStr := make(map[string]reflect.Value, len(keys))
@@ -168,15 +174,15 @@ func snapshotMap(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, d
 	for _, s := range strs {
 		val := v.MapIndex(keyByStr[s])
 		fmt.Fprintf(buf, "{%s:", s)
-		snapshotVal(val, buf, visited, depth+1)
+		snapshotVal(val, buf, visited, depth+1, t)
 		buf.WriteByte('}')
 	}
 }
 
-func snapshotSlice(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int) {
+func snapshotSlice(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int, t *KeeperReflectTracker) {
 	writeUint64(buf, uint64(v.Len()))
 	for i := 0; i < v.Len(); i++ {
-		snapshotVal(v.Index(i), buf, visited, depth+1)
+		snapshotVal(v.Index(i), buf, visited, depth+1, t)
 	}
 }
 

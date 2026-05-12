@@ -100,12 +100,13 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 			tracker.RecordBlock(result.MsgKeys)
 
 			outcome := report.BlockOutcome{
-				Index:       blockNum,
-				Total:       totalBlocks,
-				FixtureName: name,
-				IsCanary:    isCanary,
-				Verdict:     result.Verdict,
-				Findings:    result.Findings,
+				Index:         blockNum,
+				Total:         totalBlocks,
+				FixtureName:   name,
+				IsCanary:      isCanary,
+				Verdict:       result.Verdict,
+				Findings:      result.Findings,
+				OracleTxCodes: result.OracleTxCodes,
 			}
 			rep.Block(outcome)
 

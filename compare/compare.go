@@ -44,6 +44,16 @@ func Run(input Input) (*Result, error) {
 
 	height := input.Block.Height
 	result := &Result{Height: height}
+
+	// Capture oracle tx error codes for all blocks so the reporter can surface
+	// ante handler rejections on CANARY MISSED.
+	if len(oracleRes.TxResults) > 0 {
+		result.OracleTxCodes = make([]uint32, len(oracleRes.TxResults))
+		for i, r := range oracleRes.TxResults {
+			result.OracleTxCodes[i] = r.Code
+		}
+	}
+
 	var findings []Finding
 
 	if !bytes.Equal(oracleRes.AppHash, probeRes.AppHash) {
