@@ -5,6 +5,30 @@ import (
 	"strings"
 )
 
+// denyTrackerPrefixes lists keeper/module package path prefixes whose tracker
+// instances should be skipped entirely. Use this for modules whose fields
+// change deterministically (same value in oracle and probe) but are not
+// KVStore-backed, causing false-positive out_of_kvstore findings.
+//
+// cosmossdk.io/x/upgrade: Keeper.downgradeVerified transitions false→true on
+// the first block of every run. Both oracle and probe make the same transition
+// so it never causes a real divergence, but the tracker records it as a
+// mutation. Excluding the entire upgrade keeper avoids the false positive.
+var denyTrackerPrefixes = []string{
+	"cosmossdk.io/x/upgrade",
+}
+
+// ShouldSkipTracker returns true when a KeeperReflectTracker whose name starts
+// with one of the denyTrackerPrefixes should be excluded from snapshotting.
+func ShouldSkipTracker(name string) bool {
+	for _, prefix := range denyTrackerPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // denyPkgPrefixes lists package path prefixes whose types are excluded from
 // snapshotting: KVStore-backed types, immutable config, and framework internals
 // that do not represent application-level mutable out-of-KV state.
