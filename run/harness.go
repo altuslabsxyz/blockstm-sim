@@ -125,6 +125,20 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 		exec.Close()
 	}
 
+	// When every canary block is missed it almost always means a systematic
+	// setup error rather than a true detection failure. Surface actionable hints
+	// before the summary so the operator does not have to guess.
+	if canaryMissed > 0 && canaryExpected == 0 {
+		_, _ = fmt.Fprintf(errOut, "\nWARN: all canary blocks missed — possible causes:\n")
+		_, _ = fmt.Fprintf(errOut, "  • genesis mismatch: factory genesis ≠ fixture genesis\n")
+		_, _ = fmt.Fprintf(errOut, "    → use WithAppFactoryFunc instead of WithAppFactory so each fixture\n")
+		_, _ = fmt.Fprintf(errOut, "      gets an app bootstrapped from its own accounts\n")
+		_, _ = fmt.Fprintf(errOut, "  • ante handler rejection: canary message types blocked before handler runs\n")
+		_, _ = fmt.Fprintf(errOut, "    → check oracle TxResult error_code for canary blocks\n")
+		_, _ = fmt.Fprintf(errOut, "  • keeper not registered via RegisterKeeperDiscovery\n")
+		_, _ = fmt.Fprintf(errOut, "    → check sdkimpl.go RegisterKeeperDiscovery callback\n\n")
+	}
+
 	summary := report.Summary{
 		TotalBlocks:     totalBlocks,
 		OKCount:         okCount,

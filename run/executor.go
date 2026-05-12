@@ -163,6 +163,12 @@ func buildAppConfig() depinject.Config {
 // The second return value is the raw (unwrapped) app passed to sdkhook.DiscoverKeepers.
 type AppFactory func(db dbm.DB, txCfgOut *client.TxConfig, outputs ...any) (sdkhook.App, any, error)
 
+// AppFactoryFunc produces an AppFactory bound to a specific genesis. Called
+// once per Init so each fixture gets an app bootstrapped from its own accounts.
+// Use WithAppFactoryFunc when fixtures in the corpus have different account sets
+// (e.g. bank-send fixtures use sender/receiver; canary fixtures use alice/bob).
+type AppFactoryFunc func(genesis compare.GenesisSpec) AppFactory
+
 type FixtureExecutor struct {
 	oracle        sdkhook.App
 	probe         sdkhook.App
@@ -177,6 +183,9 @@ type FixtureExecutor struct {
 	// appFactory, when non-nil, overrides the default simtestutil-based app construction.
 	// Set via WithAppFactory to wire a real chain app (e.g. stable.NewApp()).
 	appFactory AppFactory
+	// appFactoryFn, when non-nil, is called in Init with the fixture's genesis to
+	// produce an AppFactory. Takes precedence over appFactory.
+	appFactoryFn AppFactoryFunc
 }
 
 // WithSTMOracle configures the oracle to use BlockSTM with more than one worker.
@@ -191,6 +200,14 @@ func WithAppFactory(f AppFactory) func(*FixtureExecutor) {
 	return func(e *FixtureExecutor) { e.appFactory = f }
 }
 
+// WithAppFactoryFunc sets a genesis-aware factory function on the executor.
+// fn is called in Init with the fixture's GenesisSpec, returning an AppFactory
+// bound to that genesis. This avoids the need for a per-fixture executor wrapper
+// when the corpus contains fixtures with different account sets.
+func WithAppFactoryFunc(fn AppFactoryFunc) func(*FixtureExecutor) {
+	return func(e *FixtureExecutor) { e.appFactoryFn = fn }
+}
+
 func NewFixtureExecutor(opts ...func(*FixtureExecutor)) *FixtureExecutor {
 	fe := &FixtureExecutor{}
 	for _, o := range opts {
@@ -200,6 +217,12 @@ func NewFixtureExecutor(opts ...func(*FixtureExecutor)) *FixtureExecutor {
 }
 
 func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
+	// appFactoryFn takes precedence: it binds a fresh AppFactory to this
+	// fixture's genesis so each Init gets an app with the correct accounts.
+	if e.appFactoryFn != nil {
+		e.appFactory = e.appFactoryFn(genesis)
+	}
+
 	gs, err := initGenesis(genesis)
 	if err != nil {
 		return err

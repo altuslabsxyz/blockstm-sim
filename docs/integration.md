@@ -273,6 +273,33 @@ func TestBlockSTM(t *testing.T) {
 > fixture's accounts and balances into the chain's native genesis JSON format
 > (bank module balances + auth module accounts).
 
+> **chain-ID requirement**: `blockstm-sim`'s tx signer always uses an empty
+> chain-ID (`""`). Set `RequestInitChain.ChainId = ""` in `buildGenesisFromSpec`
+> so that the ante handler's chain-ID check passes. Using a non-empty chain-ID
+> causes every transaction to fail auth, producing no divergence findings even
+> when violations exist.
+
+### Using `WithAppFactoryFunc` for multi-genesis corpora
+
+When the corpus contains fixtures with different account sets (e.g. bank-send
+fixtures use `sender`/`receiver` while canary fixtures use `alice`/`bob`),
+pre-binding a single genesis to the factory via `WithAppFactory(fn(genesis))`
+causes auth failures for fixtures whose accounts differ from the bound genesis.
+
+Use `WithAppFactoryFunc` instead — it calls `fn(genesis)` in each `Init` so
+every fixture gets an app bootstrapped from its own accounts:
+
+```go
+// Before: genesis bound once at construction time — breaks for canary fixtures
+executor := run.NewFixtureExecutor(run.WithAppFactory(chainFactory(stores[0].Genesis())))
+
+// After: genesis passed per Init — each fixture gets the correct app
+executor := run.NewFixtureExecutor(run.WithAppFactoryFunc(chainFactory))
+```
+
+The factory signature stays the same (`func(genesis GenesisSpec) AppFactory`);
+only the call site changes.
+
 ---
 
 ## Test Registration (Unit Tests)
