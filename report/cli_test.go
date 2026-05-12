@@ -183,6 +183,42 @@ func TestFooter_Coverage_SomeUncovered(t *testing.T) {
 	require.Contains(t, got, "0 tx")
 }
 
+func TestFooter_Coverage_StatePatterns(t *testing.T) {
+	r, out, _ := newReporter()
+	r.Footer(report.Summary{
+		TotalBlocks: 3,
+		OKCount:     3,
+		Coverage: coverage.Report{
+			Covered: []coverage.EntryStat{
+				{Entry: coverage.Entry{Key: "bank-send", Module: "bank", MsgType: "MsgSend", HandlerFn: "Send"}, Count: 3},
+			},
+		},
+		StatePatterns: coverage.StatePatternReport{
+			{Key: "bank-send", DistinctCount: 2},
+		},
+	}, false)
+	got := out.String()
+	require.Contains(t, got, "3 tx")
+	require.Contains(t, got, "2 state patterns")
+}
+
+func TestFooter_Coverage_NoStatePatterns(t *testing.T) {
+	r, out, _ := newReporter()
+	r.Footer(report.Summary{
+		TotalBlocks: 1,
+		OKCount:     1,
+		Coverage: coverage.Report{
+			Covered: []coverage.EntryStat{
+				{Entry: coverage.Entry{Key: "bank-send", Module: "bank", MsgType: "MsgSend", HandlerFn: "Send"}, Count: 1},
+			},
+		},
+		// StatePatterns intentionally empty — should not appear in output
+	}, false)
+	got := out.String()
+	require.Contains(t, got, "1 tx")
+	require.NotContains(t, got, "state patterns")
+}
+
 type errWriter struct{ n int }
 
 func (w *errWriter) Write([]byte) (int, error) { w.n++; return 0, &writeErr{} }

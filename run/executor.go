@@ -387,15 +387,19 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 	if err == nil {
 		if len(block.Txs) > 0 {
 			result.MsgKeys = make([]string, len(block.Txs))
+			result.TxWriteSets = make([][]string, len(block.Txs))
 			for i, spec := range block.Txs {
 				result.MsgKeys[i] = spec.Msg
+				result.TxWriteSets[i] = oracleObs.TxWriteSet(i)
 			}
 		} else {
 			// RawTxs path: no fixture TxSpecs, use "raw" as a placeholder so
 			// MsgKeys length matches the number of executed transactions.
 			result.MsgKeys = make([]string, len(txs))
+			result.TxWriteSets = make([][]string, len(txs))
 			for i := range result.MsgKeys {
 				result.MsgKeys[i] = "raw"
+				result.TxWriteSets[i] = oracleObs.TxWriteSet(i)
 			}
 		}
 	}

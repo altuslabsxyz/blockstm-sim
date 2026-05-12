@@ -32,6 +32,7 @@ type Summary struct {
 	CanaryMissed    int
 	ReporterErrors  int
 	Coverage        coverage.Report
+	StatePatterns   coverage.StatePatternReport
 }
 
 func (s Summary) ExitCode(failOnDivergence bool) int {
@@ -86,11 +87,11 @@ func (r *CLIReporter) Footer(s Summary, failOnDivergence bool) {
 	exit := s.ExitCode(failOnDivergence)
 	r.write(fmt.Sprintf("\nSummary\n  %d blocks run / %d ok / %d divergence (%d canary expected) / %d canary missed\n",
 		s.TotalBlocks, s.OKCount, s.DivergenceCount, s.CanaryExpected, s.CanaryMissed))
-	r.writeCoverage(s.Coverage)
+	r.writeCoverage(s.Coverage, s.StatePatterns)
 	r.write(fmt.Sprintf("Exit: %d\n", exit))
 }
 
-func (r *CLIReporter) writeCoverage(cov coverage.Report) {
+func (r *CLIReporter) writeCoverage(cov coverage.Report, patterns coverage.StatePatternReport) {
 	total := len(cov.Covered) + len(cov.Uncovered)
 	if total == 0 {
 		return
@@ -98,7 +99,11 @@ func (r *CLIReporter) writeCoverage(cov coverage.Report) {
 	r.write(fmt.Sprintf("Coverage  registered=%d  covered=%d  uncovered=%d\n",
 		total, len(cov.Covered), len(cov.Uncovered)))
 	for _, s := range cov.Covered {
-		r.write(fmt.Sprintf("  %-14s %-26s %-16s %d tx\n", s.Module, s.MsgType, s.HandlerFn, s.Count))
+		patternSuffix := ""
+		if n := patterns.DistinctCount(s.Key); n > 0 {
+			patternSuffix = fmt.Sprintf("  %d state patterns", n)
+		}
+		r.write(fmt.Sprintf("  %-14s %-26s %-16s %d tx%s\n", s.Module, s.MsgType, s.HandlerFn, s.Count, patternSuffix))
 	}
 	for _, e := range cov.Uncovered {
 		r.write(fmt.Sprintf("! %-14s %-26s %-16s 0 tx\n", e.Module, e.MsgType, e.HandlerFn))
