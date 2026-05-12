@@ -130,13 +130,15 @@ import (
 ## Registrations Summary
 
 Three functions must be called from `init()` before any executor is
-constructed. Each panics if called more than once to catch double-registration.
+constructed. `Register*` functions panic if called more than once;
+`AppendKeeperDiscovery` is additive and can be called multiple times.
 
 | Function | What it provides |
 |----------|-----------------|
 | `sdkhook.RegisterAppWrapper(f)` | `*runtime.App` → `sdkhook.App` bridge |
 | `sdkhook.RegisterSTMRunnerFactory(f)` | parallel runner construction |
-| `sdkhook.RegisterKeeperDiscovery(f)` | module enumeration for reflect tracker |
+| `sdkhook.RegisterKeeperDiscovery(f)` | module enumeration for reflect tracker (first registration, panics on double-call) |
+| `sdkhook.AppendKeeperDiscovery(f)` | add additional keeper discovery (e.g. canary keepers in `sdkimpl_canary.go`); can be called multiple times |
 
 ---
 
@@ -217,12 +219,14 @@ Strategies to reduce noise:
 ## Wiring a Real Chain App via AppFactory
 
 By default, `FixtureExecutor` creates a minimal test app using
-`simtestutil.SetupWithConfiguration`. To test a real chain (e.g.
-`stablelabs/stable`), supply a custom `AppFactory` via `WithAppFactory`.
+`simtestutil.SetupWithConfiguration`. To test a real chain, supply a custom
+`AppFactoryFunc` via `WithAppFactoryFunc`. The function is called once per
+`Init` so every fixture gets an app bootstrapped from its own genesis accounts.
 
-The factory receives the backing DB, an optional `*client.TxConfig` to populate,
-and any additional DI capture targets. It must return the wrapped `sdkhook.App`,
-the raw app (for keeper discovery), and an error.
+The factory signature is `func(genesis compare.GenesisSpec) run.AppFactory`.
+The inner `AppFactory` receives the backing DB, an optional `*client.TxConfig`
+to populate, and any additional DI capture targets. It must return the wrapped
+`sdkhook.App`, the raw app (for keeper discovery), and an error.
 
 ```go
 //go:build sdk_hooks
@@ -239,13 +243,14 @@ import (
     "github.com/altuslabsxyz/blockstm-sim/run"
     "github.com/altuslabsxyz/blockstm-sim/sdkhook"
 
-    stableapp "github.com/stablelabs/stable/app"
+    chainapp "your-org/your-chain/app"
 )
 
-// stableFactory creates a stable.App and initialises it from the fixture genesis.
-func stableFactory(genesis compare.GenesisSpec) run.AppFactory {
+// chainFactory returns an AppFactory bound to the given genesis.
+// Called once per Init so each fixture gets an app with the correct accounts.
+func chainFactory(genesis compare.GenesisSpec) run.AppFactory {
     return func(db dbm.DB, txCfgOut *client.TxConfig, _ ...any) (sdkhook.App, any, error) {
-        app := stableapp.NewApp(logger, db, nil, true, appOpts, evmChainID)
+        app := chainapp.NewApp(logger, db, nil, true, appOpts)
         if txCfgOut != nil {
             *txCfgOut = app.TxConfig()
         }
@@ -259,9 +264,8 @@ func stableFactory(genesis compare.GenesisSpec) run.AppFactory {
 }
 
 func TestBlockSTM(t *testing.T) {
-    genesis := compare.GenesisSpec{ /* load from fixture YAML */ }
-    executor := run.NewFixtureExecutor(run.WithAppFactory(stableFactory(genesis)))
     stores, _ := compare.LoadCorpusStores("./corpus/fixtures")
+    executor := run.NewFixtureExecutor(run.WithAppFactoryFunc(chainFactory))
     rep := report.NewCLI(os.Stdout, os.Stderr)
     cfg := run.Config{CorpusDir: "./corpus/fixtures", Probes: 1}
     code := run.RunHarness(cfg, executor, stores, rep, os.Stderr)
