@@ -41,6 +41,10 @@ func (a *appAdapter) SetBlockSTMTxRunner(runner sdkhook.STMRunner) {
 	a.App.SetBlockSTMTxRunner(runner.(sdk.TxRunner))
 }
 
+func (a *appAdapter) CommitMultiStore() storetypes.CommitMultiStore {
+	return a.App.CommitMultiStore()
+}
+
 func init() {
 	sdkhook.RegisterKeeperDiscovery(func(raw any) []any {
 		app := raw.(*runtime.App)
