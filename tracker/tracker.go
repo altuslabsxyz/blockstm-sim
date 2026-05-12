@@ -16,15 +16,22 @@ import (
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 )
 
+// depthWarnedTypes tracks tracker names that have already emitted a maxDepth
+// warning. Keyed by tracker name so the warning fires at most once per type
+// across all fixtures and all runs.
+var (
+	depthWarnedMu    sync.Mutex
+	depthWarnedTypes = make(map[string]bool)
+)
+
 var _ compare.MutationTracker = (*KeeperReflectTracker)(nil)
 
 // KeeperReflectTracker implements compare.MutationTracker via reflection.
 // It snapshots the mutable, non-KVStore fields of any keeper or module instance,
 // detecting out-of-KVStore state changes without any marker interface on the target.
 type KeeperReflectTracker struct {
-	name        string
-	obj         any
-	depthWarned bool // emits at most one maxDepth warning per tracker instance
+	name string
+	obj  any
 }
 
 // New wraps any keeper or module instance. The tracker name is derived from
@@ -59,9 +66,15 @@ const maxDepth = 8
 
 func snapshotVal(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int, t *KeeperReflectTracker) {
 	if depth > maxDepth {
-		if t != nil && !t.depthWarned {
-			t.depthWarned = true
-			log.Printf("WARN: tracker %s: field depth exceeds %d; mutations in deeply nested structs will not be detected", t.name, maxDepth)
+		if t != nil {
+			depthWarnedMu.Lock()
+			if !depthWarnedTypes[t.name] {
+				depthWarnedTypes[t.name] = true
+				depthWarnedMu.Unlock()
+				log.Printf("WARN: tracker %s: field depth exceeds %d; mutations in deeply nested structs will not be detected", t.name, maxDepth)
+			} else {
+				depthWarnedMu.Unlock()
+			}
 		}
 		return
 	}
