@@ -16,6 +16,7 @@ var denyPkgPrefixes = []string{
 	"cosmossdk.io/depinject",
 	"github.com/cosmos/cosmos-sdk/codec",
 	"github.com/cosmos/cosmos-sdk/baseapp",
+	"github.com/cosmos/cosmos-sdk/runtime",
 	"github.com/cosmos/cosmos-sdk/types/module",
 	"github.com/cosmos/cosmos-sdk/client",
 	"github.com/cosmos/cosmos-sdk/server",

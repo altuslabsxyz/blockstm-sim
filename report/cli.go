@@ -11,12 +11,16 @@ import (
 )
 
 type BlockOutcome struct {
-	Index       int
-	Total       int
-	FixtureName string
-	IsCanary    bool
-	Verdict     compare.Verdict
-	Findings    []compare.Finding
+	Index          int
+	Total          int
+	FixtureName    string
+	IsCanary       bool
+	Verdict        compare.Verdict
+	Findings       []compare.Finding
+	// OracleTxCodes holds the error code for each oracle tx result.
+	// Populated only for canary blocks so the reporter can surface
+	// ante handler rejections on CANARY MISSED without impacting normal output.
+	OracleTxCodes  []uint32
 }
 
 type Summary struct {
@@ -63,6 +67,11 @@ func (r *CLIReporter) Block(o BlockOutcome) {
 	switch {
 	case o.IsCanary && o.Verdict == compare.Match:
 		r.write(fmt.Sprintf("%s CANARY MISSED %s\n", prefix, o.FixtureName))
+		for i, code := range o.OracleTxCodes {
+			if code != 0 {
+				r.write(fmt.Sprintf("  oracle tx[%d]: code=%d\n", i, code))
+			}
+		}
 	case o.Verdict == compare.Match:
 		r.write(fmt.Sprintf("%s ok %s\n", prefix, o.FixtureName))
 	case o.Verdict == compare.Divergence:

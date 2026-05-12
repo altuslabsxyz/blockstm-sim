@@ -72,9 +72,11 @@ type STMRunnerFactory func(
 type KeeperDiscoveryFunc func(rawApp any) []any
 
 var keeperDiscoveryFn KeeperDiscoveryFunc
+var keeperDiscoveryFns []KeeperDiscoveryFunc
 
 // RegisterKeeperDiscovery registers the KeeperDiscoveryFunc provided by the
-// chain adapter. Panics if called more than once.
+// chain adapter. Panics if called more than once. Prefer AppendKeeperDiscovery
+// when multiple registrations are needed (e.g. base + canary keepers).
 func RegisterKeeperDiscovery(f KeeperDiscoveryFunc) {
 	if keeperDiscoveryFn != nil {
 		panic("sdkhook: KeeperDiscovery already registered")
@@ -82,13 +84,27 @@ func RegisterKeeperDiscovery(f KeeperDiscoveryFunc) {
 	keeperDiscoveryFn = f
 }
 
-// DiscoverKeepers returns all keeper/module instances from the raw app using
-// the registered discovery function. Returns nil if none is registered.
+// AppendKeeperDiscovery adds f to the keeper discovery chain. All registered
+// functions are called in registration order and their results concatenated.
+// Unlike RegisterKeeperDiscovery, calling this multiple times does not panic,
+// making it suitable for layered registration (e.g. sdkimpl.go + sdkimpl_canary.go).
+func AppendKeeperDiscovery(f KeeperDiscoveryFunc) {
+	keeperDiscoveryFns = append(keeperDiscoveryFns, f)
+}
+
+// DiscoverKeepers returns all keeper/module instances from the raw app.
+// Results from RegisterKeeperDiscovery (if set) are returned first, followed
+// by the concatenated results of all AppendKeeperDiscovery registrations.
+// Returns nil if no discovery function has been registered.
 func DiscoverKeepers(rawApp any) []any {
-	if keeperDiscoveryFn == nil {
-		return nil
+	var out []any
+	if keeperDiscoveryFn != nil {
+		out = append(out, keeperDiscoveryFn(rawApp)...)
 	}
-	return keeperDiscoveryFn(rawApp)
+	for _, fn := range keeperDiscoveryFns {
+		out = append(out, fn(rawApp)...)
+	}
+	return out
 }
 
 // AppWrapFunc adapts a raw SDK app (e.g. *runtime.App) into an sdkhook.App.
