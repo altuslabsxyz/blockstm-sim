@@ -231,10 +231,9 @@ func TestBlockSTM_FixtureCorpus(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, stores, "corpus must contain at least one fixture")
 
-	// All fixtures share the same genesis accounts.
-	genesis := stores[0].Genesis()
-
-	executor := run.NewFixtureExecutor(run.WithAppFactory(ChainAppFactory(genesis)))
+	// WithAppFactoryFunc calls ChainAppFactory(genesis) on each Init so every
+	// fixture gets an app bootstrapped from its own genesis accounts.
+	executor := run.NewFixtureExecutor(run.WithAppFactoryFunc(ChainAppFactory))
 
 	rep := report.NewCLI(os.Stdout, os.Stderr)
 	cfg := run.Config{
@@ -294,6 +293,10 @@ jobs:
         run: |
           go test \
             -tags "sdk_hooks simharness simharness_canary" \
+            # sdk_hooks: enables sdkhook factory registration
+            # simharness: enables GlobalSink and harness entry point
+            # simharness_canary: includes x/simcanary module for canary validation
+            # Add chain-specific tags as needed (e.g. "sim test" for EVM chains)
             -timeout 10m \
             -v \
             ./integration/blockstm/...

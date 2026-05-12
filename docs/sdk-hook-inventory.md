@@ -1,6 +1,22 @@
 # SDK Fork-Specific API Inventory
 
-> **Purpose**: Identify every call site in `blockstm-sim` that depends on a cosmos-sdk fork's
+> **Status**: Implementation complete. This document served as the design input for
+> `sdkhook/sdkhook.go`. The actual implemented types differ from the proposals below:
+>
+> ```go
+> // Proposed (this doc)
+> type AppFactory func(genesis compare.GenesisSpec) (App, client.TxConfig, error)
+>
+> // Actual implementation
+> type AppFactory    func(db dbm.DB, txCfgOut *client.TxConfig, outputs ...any) (sdkhook.App, any, error)
+> type AppFactoryFunc func(genesis compare.GenesisSpec) AppFactory
+> ```
+>
+> For current API reference see `sdkhook/sdkhook.go` and `run/executor.go`.
+
+---
+
+> **Original purpose**: Identify every call site in `blockstm-sim` that depends on a cosmos-sdk fork's
 > BlockSTM-specific additions. This drives the interface design in `sdkhook/sdkhook.go`.
 >
 > **Rule**: Anything in this doc's "Must be interfaced" section cannot remain as a direct import
