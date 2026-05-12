@@ -57,3 +57,7 @@ func (a *testAppAdapter) SetLifecycleObserver(obs compare.LifecycleObserver) {
 func (a *testAppAdapter) SetBlockSTMTxRunner(runner sdkhook.STMRunner) {
 	a.App.SetBlockSTMTxRunner(runner.(sdk.TxRunner))
 }
+
+func (a *testAppAdapter) CommitMultiStore() storetypes.CommitMultiStore {
+	return a.App.CommitMultiStore()
+}

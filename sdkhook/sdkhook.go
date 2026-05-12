@@ -44,6 +44,11 @@ type App interface {
 	// GetStoreKeys returns all store keys registered with the app.
 	// Used to wire the STMRunner to the multistore.
 	GetStoreKeys() []storetypes.StoreKey
+
+	// CommitMultiStore returns the root multi-store.
+	// Used by SnapshotExecutor to call CacheMultiStoreWithVersion for
+	// loading pre-block state at a specific height.
+	CommitMultiStore() storetypes.CommitMultiStore
 }
 
 // STMRunner is the parallel BlockSTM transaction runner.
