@@ -42,6 +42,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 	ctx := context.Background()
 
 	tracker := coverage.NewTracker()
+	patternTracker := coverage.NewStatePatternTracker()
 
 	var (
 		okCount         int
@@ -98,6 +99,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 			}
 
 			tracker.RecordBlock(result.MsgKeys)
+			patternTracker.RecordBlock(result.MsgKeys, result.TxWriteSets)
 
 			outcome := report.BlockOutcome{
 				Index:         blockNum,
@@ -148,6 +150,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 		CanaryMissed:    canaryMissed,
 		ReporterErrors:  rep.Errors(),
 		Coverage:        tracker.Report(),
+		StatePatterns:   patternTracker.Report(),
 	}
 	rep.Footer(summary, cfg.FailOnDivergence)
 

@@ -11,6 +11,7 @@ type Result struct {
 	Verdict       Verdict
 	Height        int64
 	Findings      []Finding
-	MsgKeys       []string // fixture msg keys exercised in this block, one per tx
-	OracleTxCodes []uint32 // error code per oracle tx; populated for all blocks
+	MsgKeys       []string   // fixture msg keys exercised in this block, one per tx
+	TxWriteSets   [][]string // oracle write keys per tx, parallel to MsgKeys; nil when unavailable
+	OracleTxCodes []uint32   // error code per oracle tx; populated for all blocks
 }

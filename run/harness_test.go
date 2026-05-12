@@ -290,3 +290,19 @@ func TestHarness_StateInitializer_InitError(t *testing.T) {
 	require.Contains(t, errOut.String(), "state load failed")
 	require.True(t, store.closed, "store.Close() should be called even when InitFromState fails")
 }
+
+func TestHarness_StatePatternInFooter(t *testing.T) {
+	dir := t.TempDir()
+	// Two blocks, each with one bank-send tx; distinct write sets → 2 patterns.
+	writeFixture(t, dir, "01-test", "", 2)
+
+	exec := &mockExecutor{results: []*compare.Result{
+		{Verdict: compare.Match, TxWriteSets: [][]string{{"bank/aabb"}}},
+		{Verdict: compare.Match, TxWriteSets: [][]string{{"bank/ccdd"}}},
+	}}
+
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), report.NewCLI(out, errOut), errOut)
+
+	require.Contains(t, out.String(), "2 state patterns")
+}
