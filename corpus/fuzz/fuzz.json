@@ -1,0 +1,15 @@
+{
+  "seed": 42,
+  "blocks": 50,
+  "tx_per_block": 5,
+  "weights": {
+    "bank-send": 1
+  },
+  "genesis": {
+    "accounts": {
+      "alice":   { "balance": "1000000000stake" },
+      "bob":     { "balance": "1000000000stake" },
+      "charlie": { "balance": "1000000000stake" }
+    }
+  }
+}
