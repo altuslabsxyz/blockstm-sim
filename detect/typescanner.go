@@ -30,7 +30,10 @@ func NewTypeScanner(rules RuleSet) *TypeScanner {
 
 // ScanDir loads all packages under root using go/packages and scans them.
 // Falls back to the AST-only Scanner if packages cannot be loaded.
-func (s *TypeScanner) ScanDir(root string) (*ScanResult, error) {
+//
+// excludePaths is a list of path prefixes (relative to root) to skip entirely,
+// e.g. []string{"client/cli"}.
+func (s *TypeScanner) ScanDir(root string, excludePaths ...string) (*ScanResult, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return NewScanner(s.rules).ScanDir(root)
@@ -74,6 +77,9 @@ func (s *TypeScanner) ScanDir(root string) (*ScanResult, error) {
 				if err != nil {
 					rel = filename
 				}
+				if shouldSkipRelPath(rel, excludePaths) {
+					continue
+				}
 				result.Files++
 				result.Findings = append(result.Findings,
 					scanFileWithTypes(pkg.Fset, f, rel, idx, typesInfo)...)
@@ -87,6 +93,9 @@ func (s *TypeScanner) ScanDir(root string) (*ScanResult, error) {
 				rel, err := filepath.Rel(absRoot, filename)
 				if err != nil {
 					rel = filename
+				}
+				if shouldSkipRelPath(rel, excludePaths) {
+					continue
 				}
 				fset := token.NewFileSet()
 				f, parseErr := parser.ParseFile(fset, filename, nil, 0)
@@ -116,6 +125,31 @@ func shouldSkipFile(path string) bool {
 	return false
 }
 
+// shouldSkipRelPath returns true when the relative file path matches any of
+// the provided exclude prefixes (e.g. "client/cli").
+func shouldSkipRelPath(rel string, excludePaths []string) bool {
+	rel = filepath.ToSlash(rel)
+	for _, prefix := range excludePaths {
+		prefix = filepath.ToSlash(prefix)
+		if rel == prefix || strings.HasPrefix(rel, prefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// abciHookFunctions are block-level ABCI callbacks. Time and I/O calls inside
+// these functions are not in the tx execution path and do not cause BlockSTM
+// violations. They are excluded from all findings.
+var abciHookFunctions = map[string]bool{
+	"BeginBlocker": true,
+	"EndBlocker":   true,
+	"PreBlocker":   true,
+	"PreBlock":     true,
+	"EndBlock":     true,
+	"BeginBlock":   true,
+}
+
 
 // scanFileWithTypes is like Scanner.ScanFile but uses typesInfo for
 // type-accurate RangeStmt detection.
@@ -133,6 +167,9 @@ func scanFileWithTypes(
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Body == nil {
+			continue
+		}
+		if abciHookFunctions[fn.Name.Name] {
 			continue
 		}
 		findings = append(findings, scanBodyWithTypes(fset, fn.Body, fn.Name.Name, relPath, module, idx, aliases, typesInfo)...)
