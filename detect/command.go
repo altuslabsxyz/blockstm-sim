@@ -23,9 +23,10 @@ func NewCommand() *cobra.Command {
 			sdkPath, _ := cmd.Flags().GetString("sdk-path")
 			category, _ := cmd.Flags().GetString("category")
 			format, _ := cmd.Flags().GetString("format")
+			excludePaths, _ := cmd.Flags().GetStringSlice("exclude-path")
 
 			scanner := NewTypeScanner(DefaultRules())
-			result, err := scanner.ScanDir(sdkPath)
+			result, err := scanner.ScanDir(sdkPath, excludePaths...)
 			if err != nil {
 				return fmt.Errorf("scan: %w", err)
 			}
@@ -74,6 +75,7 @@ func NewCommand() *cobra.Command {
 	cmd.Flags().String("sdk-path", "../cosmos-sdk", "Path to SDK source tree")
 	cmd.Flags().String("category", "", "Filter to a single category: time, rand, or io")
 	cmd.Flags().String("format", "text", "Output format: text, json, or markdown")
+	cmd.Flags().StringSlice("exclude-path", nil, "Path prefixes to exclude (relative to sdk-path, repeatable). E.g. --exclude-path client/cli")
 
 	return cmd
 }

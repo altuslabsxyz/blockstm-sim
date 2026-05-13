@@ -17,7 +17,7 @@ func NewScanner(rules RuleSet) *Scanner {
 	return &Scanner{idx: rules.index()}
 }
 
-func (s *Scanner) ScanDir(root string) (*ScanResult, error) {
+func (s *Scanner) ScanDir(root string, excludePaths ...string) (*ScanResult, error) {
 	result := &ScanResult{}
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -41,6 +41,9 @@ func (s *Scanner) ScanDir(root string) (*ScanResult, error) {
 		if err != nil {
 			return err
 		}
+		if shouldSkipRelPath(rel, excludePaths) {
+			return nil
+		}
 
 		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, path, nil, 0)
@@ -63,6 +66,9 @@ func (s *Scanner) ScanFile(fset *token.FileSet, f *ast.File, relPath string) []F
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Body == nil {
+			continue
+		}
+		if abciHookFunctions[fn.Name.Name] {
 			continue
 		}
 		findings = append(findings, s.scanBody(fset, fn.Body, fn.Name.Name, relPath, module, aliases)...)

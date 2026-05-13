@@ -302,6 +302,110 @@ func G() {}
 	require.Equal(t, 1, result.Files)
 }
 
+// ---------------------------------------------------------------------------
+// ABCI hook function filter
+// ---------------------------------------------------------------------------
+
+func TestScanFile_BeginBlocker_TimeNow_NotFlagged(t *testing.T) {
+	src := `package keeper
+import "time"
+func BeginBlocker(ctx sdk.Context) {
+	_ = time.Now()
+}`
+	findings := scanSource(t, src, "x/budget/keeper/abci.go")
+	require.Empty(t, findings, "time.Now inside BeginBlocker must not be flagged")
+}
+
+func TestScanFile_EndBlocker_NotFlagged(t *testing.T) {
+	src := `package keeper
+import "time"
+func EndBlocker(ctx sdk.Context) {
+	_ = time.Now()
+}`
+	findings := scanSource(t, src, "x/staking/keeper/abci.go")
+	require.Empty(t, findings, "time.Now inside EndBlocker must not be flagged")
+}
+
+func TestScanFile_PreBlocker_NotFlagged(t *testing.T) {
+	src := `package keeper
+import "time"
+func PreBlocker(ctx sdk.Context) {
+	_ = time.Now()
+}`
+	findings := scanSource(t, src, "x/upgrade/keeper/abci.go")
+	require.Empty(t, findings)
+}
+
+func TestScanFile_NonHookFunction_StillFlagged(t *testing.T) {
+	// A function called BeginWork (not BeginBlocker) must still be scanned.
+	src := `package keeper
+import "time"
+func BeginWork(ctx sdk.Context) {
+	_ = time.Now()
+}`
+	findings := scanSource(t, src, "x/bank/keeper/work.go")
+	require.Len(t, findings, 1, "non-ABCI hook function must still be scanned")
+	require.Equal(t, "BeginWork", findings[0].FuncName)
+}
+
+// ---------------------------------------------------------------------------
+// Path exclusion (ScanDir level)
+// ---------------------------------------------------------------------------
+
+func TestScanDir_ExcludePath_SkipsMatchingPrefix(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "client", "cli", "utils.go"), `package cli
+import "os"
+func ParseMetadata() { os.ReadFile("f") }
+`)
+	writeFile(t, filepath.Join(dir, "x", "bank", "keeper.go"), `package bank
+func Keep() {}
+`)
+
+	s := NewScanner(DefaultRules())
+	result, err := s.ScanDir(dir, "client/cli")
+	require.NoError(t, err)
+	require.Empty(t, result.Findings, "client/cli path must be excluded")
+}
+
+func TestScanDir_ExcludePath_NonMatchingStillScanned(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "client", "cli", "utils.go"), `package cli
+import "os"
+func ParseMetadata() { os.ReadFile("f") }
+`)
+	writeFile(t, filepath.Join(dir, "x", "bank", "keeper.go"), `package bank
+import "os"
+func Keep() { os.Getenv("X") }
+`)
+
+	s := NewScanner(DefaultRules())
+	result, err := s.ScanDir(dir, "client/cli")
+	require.NoError(t, err)
+	require.Len(t, result.Findings, 1)
+	require.Equal(t, "x/bank/keeper.go", result.Findings[0].File)
+}
+
+func TestScanDir_ExcludePath_MultipleExclusions(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "client", "cli", "a.go"), `package cli
+import "os"
+func A() { os.ReadFile("f") }
+`)
+	writeFile(t, filepath.Join(dir, "scripts", "b.go"), `package scripts
+import "time"
+func B() { _ = time.Now() }
+`)
+	writeFile(t, filepath.Join(dir, "x", "bank", "c.go"), `package bank
+func C() {}
+`)
+
+	s := NewScanner(DefaultRules())
+	result, err := s.ScanDir(dir, "client/cli", "scripts")
+	require.NoError(t, err)
+	require.Empty(t, result.Findings)
+}
+
 func scanSource(t *testing.T, src, filename string) []Finding {
 	t.Helper()
 	fset := token.NewFileSet()
