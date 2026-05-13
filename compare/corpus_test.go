@@ -152,6 +152,18 @@ func TestFixtureCorpus_Methods(t *testing.T) {
 	require.Equal(t, "5000000stake", genesis.Accounts["alice"].Balance)
 }
 
+func TestLoadCorpusStores_RepoFuzzCorpus(t *testing.T) {
+	// Verify that the committed corpus/fuzz/fuzz.json loads as a FuzzCorpus.
+	stores, err := compare.LoadCorpusStores("../corpus/fuzz")
+	require.NoError(t, err)
+	require.Len(t, stores, 1)
+
+	fc, ok := stores[0].(*compare.FuzzCorpus)
+	require.True(t, ok, "expected *compare.FuzzCorpus, got %T", stores[0])
+	require.Equal(t, 50, fc.BlockCount())
+	require.Equal(t, "fuzz", fc.Name())
+}
+
 func TestBlockSpec_RawTxs(t *testing.T) {
 	b := compare.BlockSpec{
 		Height: 12345678,
