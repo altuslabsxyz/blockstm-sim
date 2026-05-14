@@ -41,12 +41,15 @@ type SnapshotExecutor struct {
 	oracleTrackers []compare.MutationTracker
 	appFactoryFn   AppFactoryFunc
 
-	// Owned resources released in Close(). oracleDB is opened from the snapshot
-	// directory; probeDB is opened from a temp-dir copy so the two apps can
-	// commit independently without trampling each other's IAVL versions.
-	oracleDB    dbm.DB
-	probeDB     dbm.DB
-	probeDBTemp string
+	// Owned resources released in Close(). Both oracle and probe operate on
+	// temp-dir copies of application.db so that (a) the two apps can commit
+	// independently without trampling each other's IAVL versions and (b) the
+	// original snapshot directory is never mutated, keeping it reusable across
+	// test runs.
+	oracleDB     dbm.DB
+	probeDB      dbm.DB
+	oracleDBTemp string
+	probeDBTemp  string
 }
 
 func NewSnapshotExecutor(opts ...func(*SnapshotExecutor)) *SnapshotExecutor {
@@ -70,15 +73,26 @@ func (e *SnapshotExecutor) Init(_ compare.GenesisSpec) error {
 	return fmt.Errorf("SnapshotExecutor does not support Init; use a SnapshotCorpus which triggers InitFromState")
 }
 
-// InitFromState creates oracle and probe app instances backed by separate
-// application.db handles, then pins both to IAVL version meta.Start - 1 so
-// that the harness's first FinalizeBlock(meta.Start) is accepted.
+// InitFromState creates oracle and probe app instances backed by independent
+// temp-dir copies of application.db, then pins each to IAVL version
+// meta.Start - 1 so that the harness's first FinalizeBlock(meta.Start) is
+// accepted.
 //
-// Probe isolation: goleveldb takes an exclusive LOCK on its directory, so we
-// cannot open the same application.db twice. Instead we copy application.db
-// into a temp directory and open the copy for the probe. After Commit, oracle
-// and probe diverge into separate physical stores (which is required because
-// they each commit IAVL version meta.Start with potentially different writes).
+// Why two copies: goleveldb takes an exclusive LOCK on its directory, so we
+// cannot open the same application.db twice. We also cannot reuse the
+// snapshot's original application.db for either side — a snapshot produced by
+// `blockstm-sim extract` from a live node contains every IAVL version up
+// through meta.End, and re-committing at version meta.Start with a different
+// hash (which is expected whenever the test binary differs from the
+// production binary, e.g. `-tags test` globals on EVM chains) makes IAVL's
+// SaveVersion panic with "version X was already saved to different hash".
+// Mutating the original snapshot also breaks reuse across test runs.
+//
+// To avoid both, we copy application.db into a temp dir per side and, after
+// loading at meta.Start - 1, prune every IAVL version above it via
+// CommitMultiStore.RollbackToVersion. After Commit, oracle and probe diverge
+// into separate physical stores anyway, which is required because they each
+// commit IAVL version meta.Start with potentially different writes.
 func (e *SnapshotExecutor) InitFromState(snapshotDir string, meta compare.RangeMeta) error {
 	if e.appFactoryFn == nil {
 		return fmt.Errorf("SnapshotExecutor: AppFactoryFunc not set; call WithSnapshotAppFactoryFunc")
@@ -91,31 +105,19 @@ func (e *SnapshotExecutor) InitFromState(snapshotDir string, meta compare.RangeM
 	}
 	loadVersion := meta.Start - 1
 
-	oracleDB, err := openApplicationDB(snapshotDir)
+	oracleDir, oracleDB, err := copyAndOpenApplicationDB(snapshotDir, "blockstm-sim-oracle-*")
 	if err != nil {
-		return fmt.Errorf("open oracle application.db: %w", err)
+		return fmt.Errorf("stage oracle application.db: %w", err)
 	}
+	e.oracleDBTemp = oracleDir
 	e.oracleDB = oracleDB
 
-	probeDir, err := os.MkdirTemp("", "blockstm-sim-probe-*")
+	probeDir, probeDB, err := copyAndOpenApplicationDB(snapshotDir, "blockstm-sim-probe-*")
 	if err != nil {
-		e.closeOracleDB()
-		return fmt.Errorf("create probe temp dir: %w", err)
+		e.cleanup()
+		return fmt.Errorf("stage probe application.db: %w", err)
 	}
 	e.probeDBTemp = probeDir
-
-	srcAppDB := filepath.Join(snapshotDir, applicationDBName+".db")
-	dstAppDB := filepath.Join(probeDir, applicationDBName+".db")
-	if err := copyDir(srcAppDB, dstAppDB); err != nil {
-		e.cleanup()
-		return fmt.Errorf("copy application.db to probe temp dir: %w", err)
-	}
-
-	probeDB, err := openApplicationDB(probeDir)
-	if err != nil {
-		e.cleanup()
-		return fmt.Errorf("open probe application.db: %w", err)
-	}
 	e.probeDB = probeDB
 
 	var txCfg client.TxConfig
@@ -125,9 +127,9 @@ func (e *SnapshotExecutor) InitFromState(snapshotDir string, meta compare.RangeM
 		e.cleanup()
 		return fmt.Errorf("setup oracle app: %w", err)
 	}
-	if err := oracleApp.LoadVersion(loadVersion); err != nil {
+	if err := loadAndTruncate(oracleApp, loadVersion); err != nil {
 		e.cleanup()
-		return fmt.Errorf("oracle LoadVersion(%d): %w", loadVersion, err)
+		return fmt.Errorf("oracle init at version %d: %w", loadVersion, err)
 	}
 	instrument.InstrumentSTM(oracleApp, sdkhook.NewSTMRunner(
 		txCfg.TxDecoder(), oracleApp.GetStoreKeys(), 1, 0,
@@ -145,9 +147,9 @@ func (e *SnapshotExecutor) InitFromState(snapshotDir string, meta compare.RangeM
 		e.cleanup()
 		return fmt.Errorf("setup probe app: %w", err)
 	}
-	if err := probeApp.LoadVersion(loadVersion); err != nil {
+	if err := loadAndTruncate(probeApp, loadVersion); err != nil {
 		e.cleanup()
-		return fmt.Errorf("probe LoadVersion(%d): %w", loadVersion, err)
+		return fmt.Errorf("probe init at version %d: %w", loadVersion, err)
 	}
 	instrument.InstrumentSTM(probeApp, sdkhook.NewSTMRunner(
 		txCfg.TxDecoder(), probeApp.GetStoreKeys(), 4, rand.Int63(),
@@ -157,6 +159,60 @@ func (e *SnapshotExecutor) InitFromState(snapshotDir string, meta compare.RangeM
 	e.probe = probeApp
 	e.txConfig = txCfg
 	return nil
+}
+
+// loadAndTruncate pins the app's multistore at loadVersion and discards every
+// IAVL version above it. The truncation step is what makes the subsequent
+// Commit at loadVersion+1 safe: without it, IAVL.SaveVersion would refuse to
+// overwrite the existing committed version (and panic with a hash-mismatch
+// error if the test binary's IAVL hash diverges from the original node's).
+//
+// CommitMultiStore.RollbackToVersion is the cosmos-sdk's canonical API for
+// this — it calls each IAVL store's MutableTree.LoadVersionForOverwriting,
+// which in turn invokes ndb.DeleteVersionsFrom. That function handles both
+// legacy (pre-v1, `'n'`/`'r'` prefixed) and v1 (`'s'` prefixed) IAVL key
+// formats correctly, so this works on snapshots from any node that's gone
+// through the IAVL v0→v1 migration as well as freshly-built v1 nodes.
+//
+// LoadVersion is called first so that rs.stores is populated and BaseApp's
+// internal state is initialised; RollbackToVersion then prunes and re-loads
+// the latest version (which is now loadVersion, since everything above it
+// has been deleted).
+func loadAndTruncate(app sdkhook.App, loadVersion int64) error {
+	if err := app.LoadVersion(loadVersion); err != nil {
+		return fmt.Errorf("LoadVersion: %w", err)
+	}
+	// rootmulti.Store.RollbackToVersion rejects target <= 0. When loadVersion
+	// is 0 (meta.Start == 1) there is nothing above to prune anyway, so skip.
+	if loadVersion > 0 {
+		if err := app.CommitMultiStore().RollbackToVersion(loadVersion); err != nil {
+			return fmt.Errorf("RollbackToVersion: %w", err)
+		}
+	}
+	return nil
+}
+
+// copyAndOpenApplicationDB creates a fresh temp directory, copies the
+// snapshot's application.db into it, and opens the copy. The caller owns
+// both the returned directory (to remove on cleanup) and the DB handle (to
+// close on cleanup). On error, any partial state is cleaned up internally.
+func copyAndOpenApplicationDB(snapshotDir, tempPattern string) (string, dbm.DB, error) {
+	tempDir, err := os.MkdirTemp("", tempPattern)
+	if err != nil {
+		return "", nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	src := filepath.Join(snapshotDir, applicationDBName+".db")
+	dst := filepath.Join(tempDir, applicationDBName+".db")
+	if err := copyDir(src, dst); err != nil {
+		_ = os.RemoveAll(tempDir)
+		return "", nil, fmt.Errorf("copy application.db: %w", err)
+	}
+	db, err := openApplicationDB(tempDir)
+	if err != nil {
+		_ = os.RemoveAll(tempDir)
+		return "", nil, fmt.Errorf("open application.db: %w", err)
+	}
+	return tempDir, db, nil
 }
 
 // RunBlock runs a single mainnet block through the F1 comparison pipeline.
@@ -254,6 +310,10 @@ func (e *SnapshotExecutor) closeProbeDB() {
 func (e *SnapshotExecutor) cleanup() {
 	e.closeOracleDB()
 	e.closeProbeDB()
+	if e.oracleDBTemp != "" {
+		_ = os.RemoveAll(e.oracleDBTemp)
+		e.oracleDBTemp = ""
+	}
 	if e.probeDBTemp != "" {
 		_ = os.RemoveAll(e.probeDBTemp)
 		e.probeDBTemp = ""
