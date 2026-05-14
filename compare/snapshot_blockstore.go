@@ -57,8 +57,8 @@ func inferRangeMetaFromBlockstore(src blockRangeSource) (RangeMeta, error) {
 		return RangeMeta{}, fmt.Errorf("cannot load block at base height %d", base)
 	}
 	meta := RangeMeta{
-		ChainID:    block.Header.ChainID,
-		AppVersion: block.Header.Version.App,
+		ChainID:    block.ChainID,
+		AppVersion: block.Version.App,
 		Start:      base,
 		End:        height,
 	}
