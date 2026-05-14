@@ -88,7 +88,7 @@ func (e *RepeatRunExecutor) RunBlock(block compare.BlockSpec, height int64) (*co
 	// run exactly once per RunBlock call to keep nonces correct across blocks.
 	var txs [][]byte
 	for _, spec := range block.Txs {
-		txBytes, err := buildTx(spec, e.txConfig, e.keys, e.accountNums, e.sequences)
+		txBytes, err := buildTx(spec, e.txConfig, e.keys, e.accountNums, e.sequences, extraTxBuilders)
 		if err != nil {
 			return nil, fmt.Errorf("build tx (signer=%s, msg=%s): %w", spec.Signer, spec.Msg, err)
 		}
