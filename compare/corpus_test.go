@@ -144,7 +144,8 @@ func TestFixtureCorpus_Methods(t *testing.T) {
 	require.Equal(t, "methods-test", fc.Name())
 	require.True(t, fc.IsCanary())
 	require.Equal(t, "stake", fc.BondDenom())
-	require.Nil(t, fc.PreStateDB())
+	require.Empty(t, fc.SnapshotDir())
+	require.Equal(t, compare.RangeMeta{}, fc.Meta())
 	require.NoError(t, fc.Close())
 
 	genesis := fc.Genesis()

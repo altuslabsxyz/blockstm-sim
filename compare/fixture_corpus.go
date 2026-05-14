@@ -3,8 +3,6 @@ package compare
 import (
 	"context"
 	"iter"
-
-	dbm "github.com/cosmos/cosmos-db"
 )
 
 // FixtureCorpus wraps a Fixture to implement the CorpusStore interface.
@@ -32,8 +30,11 @@ func (fc *FixtureCorpus) Iter(ctx context.Context) iter.Seq2[Block, error] {
 	}
 }
 
-// PreStateDB returns nil for fixture-based corpora (state is built from genesis).
-func (fc *FixtureCorpus) PreStateDB() dbm.DB { return nil }
+// SnapshotDir returns "" for fixture-based corpora (state is built from genesis).
+func (fc *FixtureCorpus) SnapshotDir() string { return "" }
+
+// Meta returns a zero RangeMeta for fixture-based corpora.
+func (fc *FixtureCorpus) Meta() RangeMeta { return RangeMeta{} }
 
 // BondDenom returns the default bond denomination.
 func (fc *FixtureCorpus) BondDenom() string { return "stake" }

@@ -8,8 +8,8 @@
 package sdkhook
 
 import (
-	abci "github.com/cometbft/cometbft/abci/types"
 	storetypes "cosmossdk.io/store/types"
+	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
@@ -49,6 +49,11 @@ type App interface {
 	// Used by SnapshotExecutor to call CacheMultiStoreWithVersion for
 	// loading pre-block state at a specific height.
 	CommitMultiStore() storetypes.CommitMultiStore
+
+	// LoadVersion loads the multistore at the given IAVL version and aligns
+	// LastBlockHeight so that the next FinalizeBlock(version+1) is accepted.
+	// BaseApp satisfies this structurally.
+	LoadVersion(version int64) error
 }
 
 // STMRunner is the parallel BlockSTM transaction runner.
