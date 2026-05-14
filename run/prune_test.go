@@ -30,7 +30,12 @@ func testPruneFactory(db dbm.DB, txCfgOut *client.TxConfig, _ ...any) (sdkhook.A
 		AtGenesis:    false,
 		ValidatorSet: func() (*cmttypes.ValidatorSet, error) { return valSet, nil },
 	}
-	raw, err := simtestutil.SetupWithConfiguration(buildAppConfig(), baseCfg, txCfgOut)
+	var raw any
+	if txCfgOut != nil {
+		raw, err = simtestutil.SetupWithConfiguration(buildAppConfig(), baseCfg, txCfgOut)
+	} else {
+		raw, err = simtestutil.SetupWithConfiguration(buildAppConfig(), baseCfg)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -65,7 +70,8 @@ func bootstrapSnapshotDB(t *testing.T, snapshotDir string) int64 {
 	require.NoError(t, err)
 	app := sdkhook.WrapApp(raw)
 
-	// Genesis committed version 1. Commit two more bare versions.
+	// AtGenesis setup leaves app at version 0; commit three times to reach version 3.
+	app.CommitMultiStore().Commit()
 	app.CommitMultiStore().Commit()
 	app.CommitMultiStore().Commit()
 
