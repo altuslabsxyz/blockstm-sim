@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	dbm "github.com/cosmos/cosmos-db"
 	"github.com/stretchr/testify/require"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
@@ -206,9 +205,10 @@ func TestHarness_CoverageInFooter(t *testing.T) {
 }
 
 // mockSnapshotStore is a CorpusStore that mimics a SnapshotCorpus:
-// PreStateDB() returns a non-nil DB and Iter yields blocks with Height set.
+// SnapshotDir() returns a non-empty path and Iter yields blocks with Height set.
 type mockSnapshotStore struct {
-	appDB  dbm.DB
+	dir    string
+	meta   compare.RangeMeta
 	blocks []compare.Block
 	closed bool
 }
@@ -222,7 +222,8 @@ func (s *mockSnapshotStore) Iter(_ context.Context) iter.Seq2[compare.Block, err
 		}
 	}
 }
-func (s *mockSnapshotStore) PreStateDB() dbm.DB           { return s.appDB }
+func (s *mockSnapshotStore) SnapshotDir() string          { return s.dir }
+func (s *mockSnapshotStore) Meta() compare.RangeMeta      { return s.meta }
 func (s *mockSnapshotStore) BondDenom() string            { return "uatom" }
 func (s *mockSnapshotStore) Name() string                 { return "snap-test" }
 func (s *mockSnapshotStore) IsCanary() bool               { return false }
@@ -234,17 +235,23 @@ func (s *mockSnapshotStore) Close() error                 { s.closed = true; ret
 type mockStateExecutor struct {
 	mockExecutor
 	initFromStateCalled bool
+	initFromStateDir    string
+	initFromStateMeta   compare.RangeMeta
 	initFromStateErr    error
 }
 
-func (e *mockStateExecutor) InitFromState(_ dbm.DB) error {
+func (e *mockStateExecutor) InitFromState(dir string, meta compare.RangeMeta) error {
 	e.initFromStateCalled = true
+	e.initFromStateDir = dir
+	e.initFromStateMeta = meta
 	return e.initFromStateErr
 }
 
 func TestHarness_StateInitializer_Supported(t *testing.T) {
+	meta := compare.RangeMeta{ChainID: "x", Start: 1000, End: 1000, BondDenom: "uatom"}
 	store := &mockSnapshotStore{
-		appDB: dbm.NewMemDB(),
+		dir:  "/tmp/snap",
+		meta: meta,
 		blocks: []compare.Block{
 			{Height: 1000, RawTxs: [][]byte{[]byte("tx")}},
 		},
@@ -258,13 +265,15 @@ func TestHarness_StateInitializer_Supported(t *testing.T) {
 
 	require.Equal(t, 0, code)
 	require.True(t, exec.initFromStateCalled, "InitFromState should have been called")
+	require.Equal(t, "/tmp/snap", exec.initFromStateDir)
+	require.Equal(t, meta, exec.initFromStateMeta)
 	require.True(t, store.closed, "store.Close() should have been called after iteration")
 	require.Empty(t, errOut.String())
 }
 
 func TestHarness_StateInitializer_NotSupported(t *testing.T) {
 	store := &mockSnapshotStore{
-		appDB:  dbm.NewMemDB(),
+		dir:    "/tmp/snap",
 		blocks: []compare.Block{{Height: 1000}},
 	}
 	// mockExecutor does NOT implement StateInitializer.
@@ -279,7 +288,7 @@ func TestHarness_StateInitializer_NotSupported(t *testing.T) {
 
 func TestHarness_StateInitializer_InitError(t *testing.T) {
 	store := &mockSnapshotStore{
-		appDB:  dbm.NewMemDB(),
+		dir:    "/tmp/snap",
 		blocks: []compare.Block{{Height: 1000}},
 	}
 	exec := &mockStateExecutor{initFromStateErr: errors.New("state load failed")}

@@ -7,17 +7,24 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
-
-	dbm "github.com/cosmos/cosmos-db"
 )
 
 // Block is a type alias for BlockSpec, representing a single block in a corpus.
 type Block = BlockSpec
 
 // CorpusStore provides sequential access to blocks and their pre-state.
+//
+// For snapshot corpora, SnapshotDir returns the on-disk directory containing
+// application.db (and blockstore.db) — the executor opens its own DB handles
+// from that directory because IAVL replay needs separate physical stores for
+// oracle and probe. For non-snapshot corpora it returns "".
+//
+// Meta returns the snapshot's RangeMeta (start_height, chain_id, etc.); the
+// zero value is returned for non-snapshot corpora.
 type CorpusStore interface {
 	Iter(ctx context.Context) iter.Seq2[Block, error]
-	PreStateDB() dbm.DB
+	SnapshotDir() string
+	Meta() RangeMeta
 	BondDenom() string
 	Name() string
 	IsCanary() bool
