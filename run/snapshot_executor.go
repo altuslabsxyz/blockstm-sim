@@ -184,7 +184,10 @@ func loadAndTruncate(app sdkhook.App, loadVersion int64) error {
 	}
 	// rootmulti.Store.RollbackToVersion rejects target <= 0. When loadVersion
 	// is 0 (meta.Start == 1) there is nothing above to prune anyway, so skip.
-	if loadVersion > 0 {
+	// Also skip when the store's latest committed version already equals
+	// loadVersion — the DB has been pre-pruned (e.g. by PruneSnapshot) and
+	// RollbackToVersion would be a no-op scan.
+	if loadVersion > 0 && app.CommitMultiStore().LatestVersion() > loadVersion {
 		if err := app.CommitMultiStore().RollbackToVersion(loadVersion); err != nil {
 			return fmt.Errorf("RollbackToVersion: %w", err)
 		}
