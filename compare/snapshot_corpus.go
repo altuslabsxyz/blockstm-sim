@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"os"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
@@ -19,7 +20,9 @@ type BlockLoader interface {
 }
 
 // SnapshotCorpus supplies blocks and pre-state from a decompressed snapshot
-// directory containing blockstore.db, application.db, and range.json.
+// directory containing blockstore.db, application.db, and an optional range.json.
+// When range.json is absent the block range and chain metadata are inferred
+// from the blockstore itself.
 type SnapshotCorpus struct {
 	meta   RangeMeta
 	loader BlockLoader
@@ -27,16 +30,23 @@ type SnapshotCorpus struct {
 }
 
 // NewSnapshotCorpusFromDir opens the snapshot at dir and returns a corpus.
+// If range.json is present it is used as-is; if it is absent the block range,
+// chain ID, and app version are inferred from blockstore.db automatically.
 // The caller must call Close() to release the underlying databases.
 func NewSnapshotCorpusFromDir(dir string) (*SnapshotCorpus, error) {
-	meta, err := LoadRangeMeta(dir)
-	if err != nil {
-		return nil, err
-	}
-
+	// Open blockstore first so we can infer RangeMeta when range.json is absent.
 	bsDB, err := openBlockstoreDB(dir)
 	if err != nil {
 		return nil, fmt.Errorf("open blockstore.db: %w", err)
+	}
+
+	meta, err := LoadRangeMeta(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		meta, err = inferRangeMetaFromBlockstore(bsDB)
+	}
+	if err != nil {
+		_ = bsDB.Close()
+		return nil, err
 	}
 
 	appDB, err := dbm.NewGoLevelDB("application", dir, nil)
