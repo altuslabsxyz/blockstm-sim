@@ -2,6 +2,7 @@ package compare_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,6 +43,12 @@ func TestLoadRangeMeta_InvalidRange(t *testing.T) {
 func TestLoadRangeMeta_Missing(t *testing.T) {
 	_, err := compare.LoadRangeMeta(t.TempDir())
 	require.Error(t, err)
+}
+
+func TestLoadRangeMeta_MissingWrapsErrNotExist(t *testing.T) {
+	_, err := compare.LoadRangeMeta(t.TempDir())
+	require.True(t, errors.Is(err, os.ErrNotExist),
+		"expected os.ErrNotExist in error chain, got: %v", err)
 }
 
 func TestLoadRangeMeta_EmptyFields(t *testing.T) {
