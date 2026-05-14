@@ -27,3 +27,4 @@ go.internal.sum
 private-sdk/
 internal-sdk/
 tmp-private-sdk/
+.worktrees/
