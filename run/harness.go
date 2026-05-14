@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	dbm "github.com/cosmos/cosmos-db"
-
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 	"github.com/altuslabsxyz/blockstm-sim/coverage"
 	"github.com/altuslabsxyz/blockstm-sim/report"
@@ -19,10 +17,13 @@ type Executor interface {
 }
 
 // StateInitializer is an optional interface for executors that can initialise
-// from an existing multistore rather than from a genesis spec.
-// Requires SDK hook support for versioned multistore snapshots.
+// from an existing snapshot directory rather than from a genesis spec.
+// The executor is responsible for opening application.db handles from
+// snapshotDir (oracle and probe need physically separate stores) and for
+// loading the IAVL version at meta.Start - 1 so that the next FinalizeBlock
+// at height meta.Start is accepted.
 type StateInitializer interface {
-	InitFromState(preStateDB dbm.DB) error
+	InitFromState(snapshotDir string, meta compare.RangeMeta) error
 }
 
 type Config struct {
@@ -56,7 +57,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 		name := store.Name()
 		isCanary := store.IsCanary()
 
-		if preStateDB := store.PreStateDB(); preStateDB != nil {
+		if snapshotDir := store.SnapshotDir(); snapshotDir != "" {
 			si, ok := exec.(StateInitializer)
 			if !ok {
 				_, _ = fmt.Fprintf(errOut, "executor does not support state-based init for %s\n", name)
@@ -64,7 +65,7 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 				blockNum += store.BlockCount()
 				continue
 			}
-			if err := si.InitFromState(preStateDB); err != nil {
+			if err := si.InitFromState(snapshotDir, store.Meta()); err != nil {
 				_, _ = fmt.Fprintf(errOut, "init from state %s: %v\n", name, err)
 				_ = store.Close()
 				blockNum += store.BlockCount()

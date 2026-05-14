@@ -167,7 +167,7 @@ func TestFuzzCorpus_CorpusStoreMethods(t *testing.T) {
 	require.Equal(t, "stake", fc.BondDenom())
 	require.Equal(t, 5, fc.BlockCount())
 	require.False(t, fc.IsCanary())
-	require.Nil(t, fc.PreStateDB())
+	require.Empty(t, fc.SnapshotDir())
 	require.NoError(t, fc.Close())
 }
 

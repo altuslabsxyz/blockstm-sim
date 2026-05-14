@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	cmttypes "github.com/cometbft/cometbft/types"
-	dbm "github.com/cosmos/cosmos-db"
 	"github.com/stretchr/testify/require"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
@@ -32,8 +31,7 @@ func makeStubBlock(height int64, rawTxs ...[]byte) *cmttypes.Block {
 
 func newTestCorpus(meta compare.RangeMeta, blocks map[int64]*cmttypes.Block) *compare.SnapshotCorpus {
 	loader := &stubBlockLoader{blocks: blocks}
-	appDB := dbm.NewMemDB()
-	return compare.NewSnapshotCorpus(meta, loader, appDB)
+	return compare.NewSnapshotCorpus(meta, loader, "")
 }
 
 func TestSnapshotCorpus_Iter(t *testing.T) {
@@ -128,6 +126,7 @@ func TestSnapshotCorpus_Metadata(t *testing.T) {
 	require.Equal(t, "uatom", sc.BondDenom())
 	require.Equal(t, 100, sc.BlockCount())
 	require.False(t, sc.IsCanary())
-	require.NotNil(t, sc.PreStateDB())
+	require.Empty(t, sc.SnapshotDir())
+	require.Equal(t, meta, sc.Meta())
 	require.Equal(t, compare.GenesisSpec{}, sc.Genesis())
 }

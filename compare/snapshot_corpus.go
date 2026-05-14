@@ -7,7 +7,6 @@ import (
 	"iter"
 
 	cmttypes "github.com/cometbft/cometbft/types"
-	dbm "github.com/cosmos/cosmos-db"
 )
 
 var _ CorpusStore = (*SnapshotCorpus)(nil)
@@ -18,16 +17,21 @@ type BlockLoader interface {
 	Close() error
 }
 
-// SnapshotCorpus supplies blocks and pre-state from a decompressed snapshot
-// directory containing blockstore.db, application.db, and range.json.
+// SnapshotCorpus supplies blocks and pre-state-directory metadata from a
+// decompressed snapshot directory containing blockstore.db, application.db,
+// and range.json. The executor opens its own application.db handles from
+// SnapshotDir; IAVL replay requires physically separate stores for oracle
+// and probe, so the corpus deliberately does not hold application.db open.
 type SnapshotCorpus struct {
 	meta   RangeMeta
 	loader BlockLoader
-	appDB  dbm.DB
+	dir    string
 }
 
 // NewSnapshotCorpusFromDir opens the snapshot at dir and returns a corpus.
-// The caller must call Close() to release the underlying databases.
+// Only blockstore.db is opened here; application.db is opened by the executor
+// (SnapshotExecutor) so that oracle and probe each get their own physical DB.
+// The caller must call Close() to release the blockstore database.
 func NewSnapshotCorpusFromDir(dir string) (*SnapshotCorpus, error) {
 	meta, err := LoadRangeMeta(dir)
 	if err != nil {
@@ -39,21 +43,15 @@ func NewSnapshotCorpusFromDir(dir string) (*SnapshotCorpus, error) {
 		return nil, fmt.Errorf("open blockstore.db: %w", err)
 	}
 
-	appDB, err := dbm.NewGoLevelDB("application", dir, nil)
-	if err != nil {
-		if closeErr := bsDB.Close(); closeErr != nil {
-			err = fmt.Errorf("%w (also failed to close blockstore: %v)", err, closeErr)
-		}
-		return nil, fmt.Errorf("open application.db: %w", err)
-	}
-
-	return &SnapshotCorpus{meta: meta, loader: bsDB, appDB: appDB}, nil
+	return &SnapshotCorpus{meta: meta, loader: bsDB, dir: dir}, nil
 }
 
 // NewSnapshotCorpus creates a corpus from pre-opened components.
 // Intended for tests or custom wiring; the caller manages component lifecycle.
-func NewSnapshotCorpus(meta RangeMeta, loader BlockLoader, appDB dbm.DB) *SnapshotCorpus {
-	return &SnapshotCorpus{meta: meta, loader: loader, appDB: appDB}
+// dir is the snapshot directory containing application.db; it may be "" in
+// tests that don't exercise the executor's DB-opening path.
+func NewSnapshotCorpus(meta RangeMeta, loader BlockLoader, dir string) *SnapshotCorpus {
+	return &SnapshotCorpus{meta: meta, loader: loader, dir: dir}
 }
 
 // Iter yields one Block per height in [meta.Start, meta.End], each carrying
@@ -81,7 +79,8 @@ func (sc *SnapshotCorpus) Iter(ctx context.Context) iter.Seq2[Block, error] {
 	}
 }
 
-func (sc *SnapshotCorpus) PreStateDB() dbm.DB   { return sc.appDB }
+func (sc *SnapshotCorpus) SnapshotDir() string  { return sc.dir }
+func (sc *SnapshotCorpus) Meta() RangeMeta      { return sc.meta }
 func (sc *SnapshotCorpus) BondDenom() string    { return sc.meta.BondDenom }
 func (sc *SnapshotCorpus) Name() string         { return sc.meta.ChainID }
 func (sc *SnapshotCorpus) IsCanary() bool       { return false }
@@ -93,11 +92,6 @@ func (sc *SnapshotCorpus) Close() error {
 	if sc.loader != nil {
 		if err := sc.loader.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close blockstore: %w", err))
-		}
-	}
-	if sc.appDB != nil {
-		if err := sc.appDB.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close application.db: %w", err))
 		}
 	}
 	return errors.Join(errs...)

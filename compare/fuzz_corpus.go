@@ -6,8 +6,6 @@ import (
 	"math/rand"
 	"sort"
 
-	dbm "github.com/cosmos/cosmos-db"
-
 	"github.com/altuslabsxyz/blockstm-sim/coverage"
 )
 
@@ -133,7 +131,8 @@ func weightedSample(rng *rand.Rand, keys []string, weights []int) string {
 	return keys[len(keys)-1]
 }
 
-func (fc *FuzzCorpus) PreStateDB() dbm.DB  { return nil }
+func (fc *FuzzCorpus) SnapshotDir() string  { return "" }
+func (fc *FuzzCorpus) Meta() RangeMeta      { return RangeMeta{} }
 func (fc *FuzzCorpus) BondDenom() string    { return "stake" }
 func (fc *FuzzCorpus) Name() string         { return fc.name }
 func (fc *FuzzCorpus) IsCanary() bool       { return false }
