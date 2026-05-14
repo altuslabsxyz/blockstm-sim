@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"os"
 
 	cmttypes "github.com/cometbft/cometbft/types"
 )
@@ -19,9 +20,11 @@ type BlockLoader interface {
 
 // SnapshotCorpus supplies blocks and pre-state-directory metadata from a
 // decompressed snapshot directory containing blockstore.db, application.db,
-// and range.json. The executor opens its own application.db handles from
-// SnapshotDir; IAVL replay requires physically separate stores for oracle
-// and probe, so the corpus deliberately does not hold application.db open.
+// and an optional range.json. When range.json is absent the block range,
+// chain ID, and app version are inferred from blockstore.db automatically.
+// The executor opens its own application.db handles from SnapshotDir; IAVL
+// replay requires physically separate stores for oracle and probe, so the
+// corpus deliberately does not hold application.db open.
 type SnapshotCorpus struct {
 	meta   RangeMeta
 	loader BlockLoader
@@ -29,18 +32,25 @@ type SnapshotCorpus struct {
 }
 
 // NewSnapshotCorpusFromDir opens the snapshot at dir and returns a corpus.
+// If range.json is present it is used as-is; if it is absent the block range,
+// chain ID, and app version are inferred from blockstore.db automatically.
 // Only blockstore.db is opened here; application.db is opened by the executor
 // (SnapshotExecutor) so that oracle and probe each get their own physical DB.
 // The caller must call Close() to release the blockstore database.
 func NewSnapshotCorpusFromDir(dir string) (*SnapshotCorpus, error) {
-	meta, err := LoadRangeMeta(dir)
-	if err != nil {
-		return nil, err
-	}
-
+	// Open blockstore first so we can infer RangeMeta when range.json is absent.
 	bsDB, err := openBlockstoreDB(dir)
 	if err != nil {
 		return nil, fmt.Errorf("open blockstore.db: %w", err)
+	}
+
+	meta, err := LoadRangeMeta(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		meta, err = inferRangeMetaFromBlockstore(bsDB)
+	}
+	if err != nil {
+		_ = bsDB.Close()
+		return nil, err
 	}
 
 	return &SnapshotCorpus{meta: meta, loader: bsDB, dir: dir}, nil
