@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	sdkmath "cosmossdk.io/math"
+	abci "github.com/cometbft/cometbft/abci/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -42,8 +43,12 @@ func testPruneFactory(db dbm.DB, txCfgOut *client.TxConfig, _ ...any) (sdkhook.A
 	return sdkhook.WrapApp(raw), raw, nil
 }
 
-// bootstrapSnapshotDB creates snapshotDir/application.db with 3 committed
-// IAVL versions: genesis (version 1) plus two bare Commit() calls.
+// bootstrapSnapshotDB creates snapshotDir/application.db with 2 committed
+// IAVL versions by running 2 empty blocks via FinalizeBlock+Commit.
+// Bare CommitMultiStore().Commit() calls are intentionally avoided: the private
+// SDK's IAVL does not persist empty version entries, so LoadLatestVersion would
+// fail. FinalizeBlock+Commit runs BeginBlocker/EndBlocker which write consensus
+// state, creating real IAVL node entries at each height.
 // Returns the LatestVersion observed before close.
 func bootstrapSnapshotDB(t *testing.T, snapshotDir string) int64 {
 	t.Helper()
@@ -70,10 +75,16 @@ func bootstrapSnapshotDB(t *testing.T, snapshotDir string) int64 {
 	require.NoError(t, err)
 	app := sdkhook.WrapApp(raw)
 
-	// AtGenesis setup leaves app at version 0; commit three times to reach version 3.
-	app.CommitMultiStore().Commit()
-	app.CommitMultiStore().Commit()
-	app.CommitMultiStore().Commit()
+	// Commit two proper blocks to create loadable IAVL versions 1 and 2.
+	for i := int64(1); i <= 2; i++ {
+		_, err = app.FinalizeBlock(&abci.RequestFinalizeBlock{
+			Height:          i,
+			ProposerAddress: valSet.Proposer.Address,
+		})
+		require.NoError(t, err)
+		_, err = app.Commit()
+		require.NoError(t, err)
+	}
 
 	latest := app.CommitMultiStore().LatestVersion()
 	require.NoError(t, db.Close())
@@ -84,7 +95,7 @@ func TestPruneSnapshot_PrunesVersionsAboveTarget(t *testing.T) {
 	snapshotDir := t.TempDir()
 
 	latest := bootstrapSnapshotDB(t, snapshotDir)
-	require.Equal(t, int64(3), latest)
+	require.Equal(t, int64(2), latest)
 
 	// Prune to version 1.
 	require.NoError(t, PruneSnapshot(snapshotDir, 1, testPruneFactory))
@@ -102,7 +113,7 @@ func TestPruneSnapshot_PrePrunedDBIsNoOp(t *testing.T) {
 	snapshotDir := t.TempDir()
 	bootstrapSnapshotDB(t, snapshotDir)
 
-	// First prune: removes versions 2 and 3.
+	// First prune: removes version 2.
 	require.NoError(t, PruneSnapshot(snapshotDir, 1, testPruneFactory))
 
 	// Second prune at the same target: must succeed (already pre-pruned path).
