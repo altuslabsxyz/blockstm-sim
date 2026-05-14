@@ -86,13 +86,12 @@ func (e *SnapshotExecutor) Init(_ compare.GenesisSpec) error {
 // hash (which is expected whenever the test binary differs from the
 // production binary, e.g. `-tags test` globals on EVM chains) makes IAVL's
 // SaveVersion panic with "version X was already saved to different hash".
-// Mutating the original snapshot also breaks reuse across test runs.
 //
-// To avoid both, we copy application.db into a temp dir per side and, after
-// loading at meta.Start - 1, prune every IAVL version above it via
-// CommitMultiStore.RollbackToVersion. After Commit, oracle and probe diverge
-// into separate physical stores anyway, which is required because they each
-// commit IAVL version meta.Start with potentially different writes.
+// To avoid both, we first prune the source application.db in-place to
+// meta.Start - 1 (a no-op if already pruned from a prior run), then copy
+// the already-compact DB into two temp dirs — one per side. This order
+// means each copy is smaller, so the two file-system copies are faster than
+// the original copy-then-prune-each-copy approach.
 func (e *SnapshotExecutor) InitFromState(snapshotDir string, meta compare.RangeMeta) error {
 	if e.appFactoryFn == nil {
 		return fmt.Errorf("SnapshotExecutor: AppFactoryFunc not set; call WithSnapshotAppFactoryFunc")
@@ -104,6 +103,16 @@ func (e *SnapshotExecutor) InitFromState(snapshotDir string, meta compare.RangeM
 		return fmt.Errorf("SnapshotExecutor: invalid meta.Start %d", meta.Start)
 	}
 	loadVersion := meta.Start - 1
+
+	// Prune the source snapshot before copying so both copies start compact.
+	// The pre-pruned guard in loadAndTruncate makes this a near-no-op on
+	// subsequent runs.
+	if loadVersion > 0 {
+		factory := e.appFactoryFn(compare.GenesisSpec{})
+		if err := PruneSnapshot(snapshotDir, loadVersion, factory); err != nil {
+			return fmt.Errorf("prune source snapshot to version %d: %w", loadVersion, err)
+		}
+	}
 
 	oracleDir, oracleDB, err := copyAndOpenApplicationDB(snapshotDir, "blockstm-sim-oracle-*")
 	if err != nil {
