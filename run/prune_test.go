@@ -5,10 +5,13 @@ package run
 import (
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
+	cmttypes "github.com/cometbft/cometbft/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/client"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
-	cmttypes "github.com/cometbft/cometbft/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/altuslabsxyz/blockstm-sim/sdkhook"
@@ -45,10 +48,18 @@ func bootstrapSnapshotDB(t *testing.T, snapshotDir string) int64 {
 	valSet, err := simtestutil.CreateRandomValidatorSet()
 	require.NoError(t, err)
 
+	// GenesisStateWithValSet panics when GenAccounts is empty; supply one account.
+	priv := DeriveKey("prune-test")
+	acc := authtypes.NewBaseAccount(priv.PubKey().Address().Bytes(), priv.PubKey(), 0, 0)
+	genAccounts := []simtestutil.GenesisAccount{
+		{GenesisAccount: acc, Coins: sdk.NewCoins(sdk.NewCoin("stake", sdkmath.NewInt(10_000_000)))},
+	}
+
 	baseCfg := simtestutil.StartupConfig{
-		DB:           db,
-		AtGenesis:    true,
-		ValidatorSet: func() (*cmttypes.ValidatorSet, error) { return valSet, nil },
+		DB:              db,
+		AtGenesis:       true,
+		ValidatorSet:    func() (*cmttypes.ValidatorSet, error) { return valSet, nil },
+		GenesisAccounts: genAccounts,
 	}
 	raw, err := simtestutil.SetupWithConfiguration(buildAppConfig(), baseCfg)
 	require.NoError(t, err)
