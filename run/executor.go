@@ -128,7 +128,7 @@ type TxBuilderFn func(spec compare.TxSpec, keys map[string]cryptotypes.PrivKey) 
 
 var (
 	extraModuleOpts            []configurator.ModuleOption
-	extraTxBuilders            map[string]TxBuilderFn
+	extraTxBuilders            = map[string]TxBuilderFn{}
 	extraOracleOutputs         []any
 	extraOracleBlockCtxTracker func(height int64) *compare.BlockContextTracker
 	extraPreOracleSetup        func()
