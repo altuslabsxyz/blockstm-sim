@@ -65,6 +65,7 @@ func buildTx(
 	keys map[string]cryptotypes.PrivKey,
 	accountNums map[string]uint64,
 	sequences map[string]uint64,
+	builders map[string]TxBuilderFn,
 ) ([]byte, error) {
 	fromKey, ok := keys[spec.Signer]
 	if !ok {
@@ -88,7 +89,7 @@ func buildTx(
 			amount,
 		))
 	default:
-		if builder, ok := extraTxBuilders[spec.Msg]; ok {
+		if builder, ok := builders[spec.Msg]; ok {
 			var err error
 			msgs, err = builder(spec, keys)
 			if err != nil {
@@ -121,11 +122,13 @@ func buildTx(
 	return txConfig.TxEncoder()(tx)
 }
 
-type txBuilderFn func(spec compare.TxSpec, keys map[string]cryptotypes.PrivKey) ([]sdk.Msg, error)
+// TxBuilderFn builds SDK messages from a TxSpec for a given msg type key.
+// Register via WithExtraTxBuilders on FixtureExecutor.
+type TxBuilderFn func(spec compare.TxSpec, keys map[string]cryptotypes.PrivKey) ([]sdk.Msg, error)
 
 var (
 	extraModuleOpts            []configurator.ModuleOption
-	extraTxBuilders            = map[string]txBuilderFn{}
+	extraTxBuilders            = map[string]TxBuilderFn{}
 	extraOracleOutputs         []any
 	extraOracleBlockCtxTracker func(height int64) *compare.BlockContextTracker
 	extraPreOracleSetup        func()
@@ -186,6 +189,8 @@ type FixtureExecutor struct {
 	// appFactoryFn, when non-nil, is called in Init with the fixture's genesis to
 	// produce an AppFactory. Takes precedence over appFactory.
 	appFactoryFn AppFactoryFunc
+	// extraTxBuilders holds instance-level builders registered via WithExtraTxBuilders.
+	extraTxBuilders map[string]TxBuilderFn
 }
 
 // WithSTMOracle configures the oracle to use BlockSTM with more than one worker.
@@ -208,12 +213,34 @@ func WithAppFactoryFunc(fn AppFactoryFunc) func(*FixtureExecutor) {
 	return func(e *FixtureExecutor) { e.appFactoryFn = fn }
 }
 
+// WithExtraTxBuilders registers custom message builders on the executor.
+// Keys are the msg type strings used in TxSpec.Msg (e.g. "gov-vote").
+// Instance-level builders take precedence over package-level ones registered
+// via init() (e.g. canary builders).
+func WithExtraTxBuilders(builders map[string]TxBuilderFn) func(*FixtureExecutor) {
+	return func(e *FixtureExecutor) { e.extraTxBuilders = builders }
+}
+
 func NewFixtureExecutor(opts ...func(*FixtureExecutor)) *FixtureExecutor {
 	fe := &FixtureExecutor{}
 	for _, o := range opts {
 		o(fe)
 	}
 	return fe
+}
+
+// mergedTxBuilders returns a map that combines package-level extraTxBuilders
+// (registered via init, e.g. canary) and instance-level e.extraTxBuilders.
+// Instance-level entries take precedence over package-level ones.
+func (e *FixtureExecutor) mergedTxBuilders() map[string]TxBuilderFn {
+	merged := make(map[string]TxBuilderFn, len(extraTxBuilders)+len(e.extraTxBuilders))
+	for k, v := range extraTxBuilders {
+		merged[k] = v
+	}
+	for k, v := range e.extraTxBuilders {
+		merged[k] = v
+	}
+	return merged
 }
 
 func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
@@ -300,7 +327,7 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*compare.Result, error) {
 	var txs [][]byte
 	for _, spec := range block.Txs {
-		txBytes, err := buildTx(spec, e.txConfig, e.keys, e.accountNums, e.sequences)
+		txBytes, err := buildTx(spec, e.txConfig, e.keys, e.accountNums, e.sequences, e.mergedTxBuilders())
 		if err != nil {
 			return nil, fmt.Errorf("build tx (signer=%s, msg=%s): %w", spec.Signer, spec.Msg, err)
 		}
@@ -418,7 +445,7 @@ func (e *FixtureExecutor) Close() {
 }
 
 func (e *FixtureExecutor) buildTx(spec compare.TxSpec) ([]byte, error) {
-	return buildTx(spec, e.txConfig, e.keys, e.accountNums, e.sequences)
+	return buildTx(spec, e.txConfig, e.keys, e.accountNums, e.sequences, e.mergedTxBuilders())
 }
 
 func sortedAccountNames(m map[string]compare.AccountSpec) []string {
