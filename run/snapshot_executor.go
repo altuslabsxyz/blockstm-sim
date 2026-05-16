@@ -13,6 +13,7 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/client"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/altuslabsxyz/blockstm-sim/compare"
 	"github.com/altuslabsxyz/blockstm-sim/instrument"
@@ -282,13 +283,33 @@ func (e *SnapshotExecutor) RunBlock(block compare.BlockSpec, height int64) (*com
 		if _, cerr := e.probe.Commit(); cerr != nil {
 			return nil, fmt.Errorf("probe Commit: %w", cerr)
 		}
-		result.MsgKeys = make([]string, len(txs))
-		for i := range result.MsgKeys {
-			result.MsgKeys[i] = "raw"
-		}
+		result.MsgKeys = decodeMsgKeys(e.txConfig, txs)
 	}
 
 	return result, err
+}
+
+// decodeMsgKeys derives a per-tx coverage key from each raw tx. The key is
+// the proto type URL of the first message (e.g. /cosmos.bank.v1beta1.MsgSend).
+// Decode failures and empty-message txs fall back to "raw" — EVM-native or
+// otherwise unparseable txs land there, preserving the prior unconditional
+// behaviour for that subset.
+func decodeMsgKeys(txCfg client.TxConfig, txs [][]byte) []string {
+	keys := make([]string, len(txs))
+	decoder := txCfg.TxDecoder()
+	for i, rawTx := range txs {
+		keys[i] = "raw"
+		tx, err := decoder(rawTx)
+		if err != nil {
+			continue
+		}
+		msgs := tx.GetMsgs()
+		if len(msgs) == 0 {
+			continue
+		}
+		keys[i] = sdk.MsgTypeURL(msgs[0])
+	}
+	return keys
 }
 
 func (e *SnapshotExecutor) Close() {
