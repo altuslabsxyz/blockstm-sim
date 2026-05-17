@@ -128,11 +128,12 @@ func snapshotVal(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, d
 var (
 	mutexType   = reflect.TypeOf(sync.Mutex{})
 	rwMutexType = reflect.TypeOf(sync.RWMutex{})
+	onceType    = reflect.TypeOf(sync.Once{})
 )
 
 func snapshotStruct(v reflect.Value, buf *bytes.Buffer, visited map[uintptr]bool, depth int, trk *KeeperReflectTracker) {
 	typ := v.Type()
-	if typ == mutexType || typ == rwMutexType {
+	if typ == mutexType || typ == rwMutexType || typ == onceType {
 		return
 	}
 
