@@ -179,6 +179,19 @@ func TestSnapshot_DeepNesting_NoPanic(t *testing.T) {
 
 // ── Filtering: mutex and function fields ─────────────────────────────────────
 
+func TestSnapshot_OnceNotTracked(t *testing.T) {
+	type S struct {
+		once sync.Once
+		N    int
+	}
+	s := &S{N: 5}
+	tr := New(s)
+	snap1 := tr.SnapshotOutOfKVStoreState()
+	s.once.Do(func() {}) // transitions done: 0 → 1
+	snap2 := tr.SnapshotOutOfKVStoreState()
+	require.Equal(t, snap1, snap2, "sync.Once state must not affect snapshot")
+}
+
 func TestSnapshot_MutexNotTracked(t *testing.T) {
 	type S struct {
 		mu sync.Mutex
