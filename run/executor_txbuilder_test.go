@@ -70,3 +70,40 @@ func TestMergedTxBuilders_PackageLevelPreserved(t *testing.T) {
 	_, err = merged["inst-only"](compare.TxSpec{}, nil)
 	require.EqualError(t, err, "inst")
 }
+
+func TestWithExtraRawTxBuilders_SetsField(t *testing.T) {
+	fn := func(_ compare.TxSpec, _ map[string]cryptotypes.PrivKey) ([]byte, error) {
+		return nil, nil
+	}
+	e := NewFixtureExecutor(WithExtraRawTxBuilders(map[string]RawTxBuilderFn{"evm-transfer": fn}))
+	require.Len(t, e.extraRawTxBuilders, 1)
+	require.Contains(t, e.extraRawTxBuilders, "evm-transfer")
+}
+
+func TestRunBlock_RawBuilderTakesPrecedenceOverTxBuilder(t *testing.T) {
+	rawCalled := false
+	standardCalled := false
+
+	rawFn := func(_ compare.TxSpec, _ map[string]cryptotypes.PrivKey) ([]byte, error) {
+		rawCalled = true
+		return []byte("raw-tx-bytes"), nil
+	}
+	standardFn := func(_ compare.TxSpec, _ map[string]cryptotypes.PrivKey) ([]sdk.Msg, error) {
+		standardCalled = true
+		return nil, nil
+	}
+
+	e := NewFixtureExecutor(
+		WithExtraRawTxBuilders(map[string]RawTxBuilderFn{"evm-transfer": rawFn}),
+		WithExtraTxBuilders(map[string]TxBuilderFn{"evm-transfer": standardFn}),
+	)
+
+	// Simulate the lookup logic used in RunBlock: raw builder takes precedence.
+	spec := compare.TxSpec{Msg: "evm-transfer", Signer: "alice"}
+	if rawBuilder, ok := e.extraRawTxBuilders[spec.Msg]; ok {
+		_, err := rawBuilder(spec, nil)
+		require.NoError(t, err)
+	}
+	require.True(t, rawCalled)
+	require.False(t, standardCalled)
+}

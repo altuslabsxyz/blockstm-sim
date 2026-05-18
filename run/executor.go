@@ -126,6 +126,12 @@ func buildTx(
 // Register via WithExtraTxBuilders on FixtureExecutor.
 type TxBuilderFn func(spec compare.TxSpec, keys map[string]cryptotypes.PrivKey) ([]sdk.Msg, error)
 
+// RawTxBuilderFn builds a fully signed, wire-encoded transaction from a TxSpec.
+// Unlike TxBuilderFn, the returned bytes are passed directly to FinalizeBlock
+// without going through GenSignedMockTx. Use this for tx types that require
+// non-standard signing (e.g. EVM Ethereum txs).
+type RawTxBuilderFn func(spec compare.TxSpec, keys map[string]cryptotypes.PrivKey) ([]byte, error)
+
 var (
 	extraModuleOpts            []configurator.ModuleOption
 	extraTxBuilders            = map[string]TxBuilderFn{}
@@ -191,6 +197,9 @@ type FixtureExecutor struct {
 	appFactoryFn AppFactoryFunc
 	// extraTxBuilders holds instance-level builders registered via WithExtraTxBuilders.
 	extraTxBuilders map[string]TxBuilderFn
+	// extraRawTxBuilders holds raw-tx builders registered via WithExtraRawTxBuilders.
+	// A raw builder returns fully-encoded signed bytes, bypassing GenSignedMockTx.
+	extraRawTxBuilders map[string]RawTxBuilderFn
 }
 
 // WithSTMOracle configures the oracle to use BlockSTM with more than one worker.
@@ -219,6 +228,14 @@ func WithAppFactoryFunc(fn AppFactoryFunc) func(*FixtureExecutor) {
 // via init() (e.g. canary builders).
 func WithExtraTxBuilders(builders map[string]TxBuilderFn) func(*FixtureExecutor) {
 	return func(e *FixtureExecutor) { e.extraTxBuilders = builders }
+}
+
+// WithExtraRawTxBuilders registers raw-tx builders on the executor.
+// Keys are the msg type strings used in TxSpec.Msg (e.g. "evm-transfer").
+// When a raw builder is registered for a msg type, its output bytes are sent
+// directly to FinalizeBlock, bypassing GenSignedMockTx entirely.
+func WithExtraRawTxBuilders(builders map[string]RawTxBuilderFn) func(*FixtureExecutor) {
+	return func(e *FixtureExecutor) { e.extraRawTxBuilders = builders }
 }
 
 func NewFixtureExecutor(opts ...func(*FixtureExecutor)) *FixtureExecutor {
@@ -327,6 +344,14 @@ func (e *FixtureExecutor) Init(genesis compare.GenesisSpec) error {
 func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*compare.Result, error) {
 	var txs [][]byte
 	for _, spec := range block.Txs {
+		if rawBuilder, ok := e.extraRawTxBuilders[spec.Msg]; ok {
+			txBytes, err := rawBuilder(spec, e.keys)
+			if err != nil {
+				return nil, fmt.Errorf("build raw tx (signer=%s, msg=%s): %w", spec.Signer, spec.Msg, err)
+			}
+			txs = append(txs, txBytes)
+			continue
+		}
 		txBytes, err := buildTx(spec, e.txConfig, e.keys, e.accountNums, e.sequences, e.mergedTxBuilders())
 		if err != nil {
 			return nil, fmt.Errorf("build tx (signer=%s, msg=%s): %w", spec.Signer, spec.Msg, err)
