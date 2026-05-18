@@ -15,9 +15,23 @@ type Scanner struct{}
 // NewScanner returns a Scanner with default configuration.
 func NewScanner() *Scanner { return &Scanner{} }
 
+// shouldSkipRelPath returns true when rel matches any of the given path
+// prefixes (relative to the scan root), e.g. "x/bank" or "client/cli".
+func shouldSkipRelPath(rel string, excludePaths []string) bool {
+	rel = filepath.ToSlash(rel)
+	for _, prefix := range excludePaths {
+		prefix = filepath.ToSlash(prefix)
+		if rel == prefix || strings.HasPrefix(rel, prefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // ScanDir recursively scans all non-test .go files under root.
-// Vendor and testutil directories are skipped.
-func (s *Scanner) ScanDir(root string) (*LintResult, error) {
+// Vendor and testutil directories are skipped. excludePaths is a list of
+// path prefixes (relative to root) to skip entirely, e.g. "x/bank".
+func (s *Scanner) ScanDir(root string, excludePaths ...string) (*LintResult, error) {
 	result := &LintResult{}
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -36,6 +50,9 @@ func (s *Scanner) ScanDir(root string) (*LintResult, error) {
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
+		}
+		if shouldSkipRelPath(rel, excludePaths) {
+			return nil
 		}
 		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, path, nil, 0)
