@@ -47,3 +47,43 @@ var x int = "string causes a type error"
 	require.Equal(t, "cache", keeperFindings[0].Target)
 	require.Equal(t, "Set", keeperFindings[0].Method)
 }
+
+func TestScanDir_ExcludePath_SkipsMatchingPrefix(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "x", "bank", "keeper"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x", "bank", "keeper", "keeper.go"), []byte(`package keeper
+type Keeper struct{ cache map[string]int64 }
+func (k *Keeper) Set(val int64) { k.cache["key"] = val }
+`), 0o644))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "x", "staking", "keeper"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x", "staking", "keeper", "keeper.go"), []byte(`package keeper
+type Keeper struct{ counter int64 }
+func (k *Keeper) Inc() { k.counter++ }
+`), 0o644))
+
+	s := lint.NewScanner()
+	result, err := s.ScanDir(dir, "x/bank")
+	require.NoError(t, err)
+
+	for _, f := range result.Findings {
+		require.NotContains(t, f.File, "x/bank", "x/bank must be excluded")
+	}
+	require.NotEmpty(t, result.Findings, "x/staking findings must still be reported")
+}
+
+func TestScanDir_ExcludePath_Empty_ScansAll(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "x", "bank", "keeper"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x", "bank", "keeper", "keeper.go"), []byte(`package keeper
+type Keeper struct{ cache map[string]int64 }
+func (k *Keeper) Set(val int64) { k.cache["key"] = val }
+`), 0o644))
+
+	s := lint.NewScanner()
+	result, err := s.ScanDir(dir)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Findings)
+}

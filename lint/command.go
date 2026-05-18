@@ -26,9 +26,10 @@ manually reviewed to confirm whether the field is KVStore-backed or not.`,
 			format, _ := cmd.Flags().GetString("format")
 			kind, _ := cmd.Flags().GetString("kind")
 			failOnFindings, _ := cmd.Flags().GetBool("fail-on-findings")
+			excludePaths, _ := cmd.Flags().GetStringSlice("exclude-path")
 
 			scanner := NewScanner()
-			result, err := scanner.ScanDirWithTypes(sdkPath)
+			result, err := scanner.ScanDirWithTypes(sdkPath, excludePaths...)
 			if err != nil {
 				return fmt.Errorf("lint: %w", err)
 			}
@@ -70,6 +71,7 @@ manually reviewed to confirm whether the field is KVStore-backed or not.`,
 	cmd.Flags().String("format", "text", "Output format: text or json")
 	cmd.Flags().String("kind", "", "Filter by kind: keeper_field or pkg_var")
 	cmd.Flags().Bool("fail-on-findings", false, "Exit 1 if any findings are reported")
+	cmd.Flags().StringSlice("exclude-path", nil, "Path prefixes to exclude (relative to sdk-path, repeatable). E.g. --exclude-path x/bank")
 
 	return cmd
 }

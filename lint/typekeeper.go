@@ -42,10 +42,11 @@ func isKVStoreBacked(pkg string) bool {
 // ScanDirWithTypes loads packages via go/packages for type-accurate keeper
 // field analysis. Falls back to the AST-only ScanDir when packages cannot be
 // loaded (missing dependencies, non-buildable state).
-func (s *Scanner) ScanDirWithTypes(root string) (*LintResult, error) {
+// excludePaths is a list of path prefixes (relative to root) to skip entirely.
+func (s *Scanner) ScanDirWithTypes(root string, excludePaths ...string) (*LintResult, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return s.ScanDir(root)
+		return s.ScanDir(root, excludePaths...)
 	}
 
 	cfg := &packages.Config{
@@ -61,7 +62,7 @@ func (s *Scanner) ScanDirWithTypes(root string) (*LintResult, error) {
 	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil || len(pkgs) == 0 {
 		fmt.Fprintf(os.Stderr, "warn: go/packages load failed for %s, falling back to AST-only analysis\n", root)
-		return s.ScanDir(root)
+		return s.ScanDir(root, excludePaths...)
 	}
 
 	result := &LintResult{}
@@ -84,6 +85,9 @@ func (s *Scanner) ScanDirWithTypes(root string) (*LintResult, error) {
 				if err != nil {
 					rel = filename
 				}
+				if shouldSkipRelPath(rel, excludePaths) {
+					continue
+				}
 				result.Files++
 				result.Findings = append(result.Findings,
 					s.scanFileWithTypes(pkg.Fset, f, rel, typesInfo)...)
@@ -97,6 +101,9 @@ func (s *Scanner) ScanDirWithTypes(root string) (*LintResult, error) {
 				rel, err := filepath.Rel(absRoot, filename)
 				if err != nil {
 					rel = filename
+				}
+				if shouldSkipRelPath(rel, excludePaths) {
+					continue
 				}
 				fset := token.NewFileSet()
 				f, parseErr := parser.ParseFile(fset, filename, nil, 0)
