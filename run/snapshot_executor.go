@@ -189,15 +189,21 @@ func (e *SnapshotExecutor) InitFromState(snapshotDir string, meta compare.RangeM
 // the latest version (which is now loadVersion, since everything above it
 // has been deleted).
 func loadAndTruncate(app sdkhook.App, loadVersion int64) error {
+	// Capture the actual DB-committed latest version BEFORE calling LoadVersion.
+	// rootmulti.Store.LatestVersion() reads lastCommitInfo.Version, but when
+	// lastCommitInfo is nil (pre-load) it falls through to GetLatestVersion(db)
+	// — the true on-disk latest. After LoadVersion(n), lastCommitInfo.Version
+	// is set to n regardless of what else is in the DB, so reading here would
+	// always return n and make the rollback guard below permanently false.
+	dbLatest := app.CommitMultiStore().LatestVersion()
+
 	if err := app.LoadVersion(loadVersion); err != nil {
 		return fmt.Errorf("LoadVersion: %w", err)
 	}
 	// rootmulti.Store.RollbackToVersion rejects target <= 0. When loadVersion
 	// is 0 (meta.Start == 1) there is nothing above to prune anyway, so skip.
-	// Also skip when the store's latest committed version already equals
-	// loadVersion — the DB has been pre-pruned (e.g. by PruneSnapshot) and
-	// RollbackToVersion would be a no-op scan.
-	if loadVersion > 0 && app.CommitMultiStore().LatestVersion() > loadVersion {
+	// Also skip when the DB was already at loadVersion (pre-pruned by PruneSnapshot).
+	if loadVersion > 0 && dbLatest > loadVersion {
 		if err := app.CommitMultiStore().RollbackToVersion(loadVersion); err != nil {
 			return fmt.Errorf("RollbackToVersion: %w", err)
 		}
