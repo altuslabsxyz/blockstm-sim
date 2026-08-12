@@ -42,15 +42,22 @@ func (r *MarkdownReporter) Footer(s Summary, failOnDivergence bool) {
 	r.write("| OK | %d |\n", s.OKCount)
 	r.write("| Divergences | %d |\n", s.DivergenceCount)
 	r.write("| Canary Expected | %d |\n", s.CanaryExpected)
-	r.write("| Canary Missed | %d |\n\n", s.CanaryMissed)
+	r.write("| Canary Missed | %d |\n", s.CanaryMissed)
+	if s.MaxExecRatio > 0 {
+		r.write("| Max Execution Ratio | %.2f |\n", s.MaxExecRatio)
+	}
+	r.write("\n")
 
-	var divBlocks, missedCanaries []BlockOutcome
+	var divBlocks, missedCanaries, perfBlocks []BlockOutcome
 	for _, b := range r.blocks {
 		switch {
 		case b.IsCanary && b.Verdict == compare.Match:
 			missedCanaries = append(missedCanaries, b)
 		case b.Verdict == compare.Divergence:
 			divBlocks = append(divBlocks, b)
+		}
+		if len(b.HotKeys) > 0 {
+			perfBlocks = append(perfBlocks, b)
 		}
 	}
 
@@ -73,6 +80,23 @@ func (r *MarkdownReporter) Footer(s Summary, failOnDivergence bool) {
 			r.write("- %s\n", b.FixtureName)
 		}
 		r.write("\n")
+	}
+
+	if len(perfBlocks) > 0 {
+		r.write("## Hot Conflict Keys\n\n")
+		r.write("Max execution ratio: **%.2f** — blocks with hot keys: %d\n\n",
+			s.MaxExecRatio, s.HotKeyBlocks)
+		for _, b := range perfBlocks {
+			r.write("### %s\n\n", b.FixtureName)
+			if b.ExecutionRatio > 0 {
+				r.write("Execution ratio: **%.2f**\n\n", b.ExecutionRatio)
+			}
+			r.write("| Store | Key | Conflicts | Txs |\n|-------|-----|-----------|-----|\n")
+			for _, hk := range b.HotKeys {
+				r.write("| %s | `%s` | %d | %d |\n", hk.Store, hk.Key, hk.Conflicts, len(hk.Txs))
+			}
+			r.write("\n")
+		}
 	}
 
 	repro := reproRunCommand(r.corpus, r.probes, failOnDivergence)

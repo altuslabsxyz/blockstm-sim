@@ -21,6 +21,13 @@ type BlockOutcome struct {
 	// Populated only for canary blocks so the reporter can surface
 	// ante handler rejections on CANARY MISSED without impacting normal output.
 	OracleTxCodes  []uint32
+
+	// HotKeys lists probe conflict keys that passed the harness's
+	// HotKeyMinTxs threshold. Performance diagnostics only.
+	HotKeys []compare.HotKeyStat
+	// ExecutionRatio is the probe's executedTxns/blockSize; 0 when unavailable.
+	// Always reported when available — there is no threshold.
+	ExecutionRatio float64
 }
 
 type Summary struct {
@@ -33,6 +40,11 @@ type Summary struct {
 	ReporterErrors  int
 	Coverage        coverage.Report
 	StatePatterns   coverage.StatePatternReport
+
+	// HotKeyBlocks counts blocks with at least one reported hot key.
+	HotKeyBlocks int
+	// MaxExecRatio is the highest execution ratio observed across the run.
+	MaxExecRatio float64
 }
 
 func (s Summary) ExitCode(failOnDivergence bool) int {
@@ -81,12 +93,57 @@ func (r *CLIReporter) Block(o BlockOutcome) {
 			r.writeFinding(f)
 		}
 	}
+	r.writePerf(o)
+}
+
+// writePerf prints report-only performance diagnostics for one block: the
+// execution ratio whenever the probe supplied stats, and any hot conflict
+// keys that passed the harness's HotKeyMinTxs filter.
+func (r *CLIReporter) writePerf(o BlockOutcome) {
+	if o.ExecutionRatio > 0 {
+		r.write(fmt.Sprintf("  exec-ratio %.2f\n", o.ExecutionRatio))
+	}
+	for _, hk := range o.HotKeys {
+		r.write(fmt.Sprintf("  hot key %s/%s  conflicts=%d  txs=%s\n",
+			hk.Store, truncHash(hk.Key), hk.Conflicts, formatTxIndices(hk.Txs)))
+	}
+}
+
+// formatRatio renders an execution ratio, distinguishing "stats unavailable"
+// (0, e.g. no execution-stats observer wired) from a real measured value.
+func formatRatio(ratio float64) string {
+	if ratio == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.2f", ratio)
+}
+
+// formatTxIndices renders tx indices as "[0,1,2,…(12 total)]", truncating
+// beyond 8 entries to keep block lines readable.
+func formatTxIndices(txs []int) string {
+	const maxDisplay = 8
+	parts := make([]string, 0, min(len(txs), maxDisplay))
+	for i, tx := range txs {
+		if i == maxDisplay {
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%d", tx))
+	}
+	s := "[" + strings.Join(parts, ",")
+	if len(txs) > maxDisplay {
+		s += fmt.Sprintf(",…(%d total)", len(txs))
+	}
+	return s + "]"
 }
 
 func (r *CLIReporter) Footer(s Summary, failOnDivergence bool) {
 	exit := s.ExitCode(failOnDivergence)
 	r.write(fmt.Sprintf("\nSummary\n  %d blocks run / %d ok / %d divergence (%d canary expected) / %d canary missed\n",
 		s.TotalBlocks, s.OKCount, s.DivergenceCount, s.CanaryExpected, s.CanaryMissed))
+	if s.HotKeyBlocks > 0 || s.MaxExecRatio > 0 {
+		r.write(fmt.Sprintf("Perf  max-exec-ratio=%s  hot-key-blocks=%d  (report-only)\n",
+			formatRatio(s.MaxExecRatio), s.HotKeyBlocks))
+	}
 	r.writeCoverage(s.Coverage, s.StatePatterns)
 	r.write(fmt.Sprintf("Exit: %d\n", exit))
 }
