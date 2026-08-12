@@ -257,6 +257,8 @@ func (e *SnapshotExecutor) RunBlock(block compare.BlockSpec, height int64) (*com
 	e.oracle.SetLifecycleObserver(oracleObs)
 	e.probe.SetLifecycleObserver(probeObs)
 
+	conflictSink := compare.NewConflictSink()
+
 	result, err := compare.Run(compare.Input{
 		Oracle:          e.oracle,
 		Probe:           e.probe,
@@ -276,8 +278,16 @@ func (e *SnapshotExecutor) RunBlock(block compare.BlockSpec, height int64) (*com
 					})
 				}
 			}
+			// Observe only the probe's BlockSTM run: the observers are
+			// process-global and are installed here, after the oracle's
+			// FinalizeBlock has already completed.
+			sdkhook.InstallConflictObserver(conflictSink.RecordConflict)
+			sdkhook.InstallExecStatsObserver(conflictSink.RecordStats)
 		},
 	})
+
+	sdkhook.InstallConflictObserver(nil)
+	sdkhook.InstallExecStatsObserver(nil)
 
 	e.oracle.SetLifecycleObserver(compare.NoopLifecycleObserver{})
 	e.probe.SetLifecycleObserver(compare.NoopLifecycleObserver{})
@@ -290,6 +300,12 @@ func (e *SnapshotExecutor) RunBlock(block compare.BlockSpec, height int64) (*com
 			return nil, fmt.Errorf("probe Commit: %w", cerr)
 		}
 		result.MsgKeys = decodeMsgKeys(e.txConfig, txs)
+
+		records, stats := conflictSink.Drain()
+		result.HotKeys = compare.AggregateHotKeys(records)
+		if stats != nil {
+			result.ExecutionRatio = stats.Ratio()
+		}
 	}
 
 	return result, err
