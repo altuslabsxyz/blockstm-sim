@@ -91,7 +91,7 @@ func (r *MarkdownReporter) Footer(s Summary, failOnDivergence bool) {
 			if b.ExecutionRatio > 0 {
 				r.write("Execution ratio: **%.2f**\n\n", b.ExecutionRatio)
 			}
-			r.write("| Store | Key | Conflicts | Txs |\n|-------|-----|-----------|-----|\n")
+			r.write("| Store | Key | Conflicts | Distinct Txs |\n|-------|-----|-----------|--------------|\n")
 			for _, hk := range b.HotKeys {
 				r.write("| %s | `%s` | %d | %d |\n", hk.Store, hk.Key, hk.Conflicts, len(hk.Txs))
 			}

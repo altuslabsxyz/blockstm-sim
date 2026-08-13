@@ -174,6 +174,7 @@ func TestMarkdownReporter_PerfSection(t *testing.T) {
 	require.Contains(t, out, "Max execution ratio: **2.00**")
 	require.Contains(t, out, "### evm-parallel")
 	require.Contains(t, out, "Execution ratio: **2.00**")
+	require.Contains(t, out, "| Store | Key | Conflicts | Distinct Txs |")
 	require.Contains(t, out, "| acc | `01aa` | 5 | 3 |")
 	require.NotContains(t, out, "### clean", "blocks without hot keys stay out of the section")
 }
