@@ -333,6 +333,40 @@ func TestHarness_PerfReporting(t *testing.T) {
 	require.Contains(t, got, "Perf  max-exec-ratio=3.00  hot-key-blocks=1")
 }
 
+// mockPerfExecutor wraps mockExecutor and records SetConflictDetection calls.
+type mockPerfExecutor struct {
+	mockExecutor
+	conflictDetectionSet []bool
+}
+
+func (e *mockPerfExecutor) SetConflictDetection(enabled bool) {
+	e.conflictDetectionSet = append(e.conflictDetectionSet, enabled)
+}
+
+func TestHarness_ConflictDetectionEnabled(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "01-test", "", 1)
+
+	// HotKeyMinTxs > 0 → detection enabled on the executor.
+	exec := &mockPerfExecutor{}
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	run.RunHarness(run.Config{CorpusDir: dir, Probes: 1, HotKeyMinTxs: 2}, exec, loadStores(t, dir), report.NewCLI(out, errOut), errOut)
+
+	require.Equal(t, []bool{true}, exec.conflictDetectionSet)
+}
+
+func TestHarness_ConflictDetectionDisabled(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "01-test", "", 1)
+
+	// HotKeyMinTxs <= 0 → detection disabled, so no observer is installed.
+	exec := &mockPerfExecutor{}
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), report.NewCLI(out, errOut), errOut)
+
+	require.Equal(t, []bool{false}, exec.conflictDetectionSet)
+}
+
 func TestHarness_HotKeyReportingDisabled(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "01-test", "", 1)

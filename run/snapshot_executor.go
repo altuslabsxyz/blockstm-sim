@@ -51,7 +51,15 @@ type SnapshotExecutor struct {
 	probeDB      dbm.DB
 	oracleDBTemp string
 	probeDBTemp  string
+
+	// conflictDetection gates installation of the probe conflict observer.
+	// Set by RunHarness via SetConflictDetection based on Config.HotKeyMinTxs.
+	conflictDetection bool
 }
+
+// SetConflictDetection toggles probe conflict-observer installation.
+// Implements the run.ConflictDetectionSetter optional interface.
+func (e *SnapshotExecutor) SetConflictDetection(enabled bool) { e.conflictDetection = enabled }
 
 func NewSnapshotExecutor(opts ...func(*SnapshotExecutor)) *SnapshotExecutor {
 	e := &SnapshotExecutor{}
@@ -280,8 +288,12 @@ func (e *SnapshotExecutor) RunBlock(block compare.BlockSpec, height int64) (*com
 			}
 			// Observe only the probe's BlockSTM run: the observers are
 			// process-global and are installed here, after the oracle's
-			// FinalizeBlock has already completed.
-			sdkhook.InstallConflictObserver(conflictSink.RecordConflict)
+			// FinalizeBlock has already completed. The conflict observer is
+			// skipped entirely when hot-key reporting is disabled; execution
+			// stats are always collected (the ratio has no threshold).
+			if e.conflictDetection {
+				sdkhook.InstallConflictObserver(conflictSink.RecordConflict)
+			}
 			sdkhook.InstallExecStatsObserver(conflictSink.RecordStats)
 		},
 	})

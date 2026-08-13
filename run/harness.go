@@ -16,6 +16,14 @@ type Executor interface {
 	Close()
 }
 
+// ConflictDetectionSetter is an optional interface for executors that can
+// toggle installation of the probe conflict observer. RunHarness enables it
+// only when hot-key reporting is active (Config.HotKeyMinTxs > 0), so a
+// disabled flag also disables collection, not just display.
+type ConflictDetectionSetter interface {
+	SetConflictDetection(enabled bool)
+}
+
 // StateInitializer is an optional interface for executors that can initialise
 // from an existing snapshot directory rather than from a genesis spec.
 // The executor is responsible for opening application.db handles from
@@ -46,6 +54,10 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 	}
 
 	rep.Header(cfg.CorpusDir, totalBlocks, cfg.Probes)
+
+	if cd, ok := exec.(ConflictDetectionSetter); ok {
+		cd.SetConflictDetection(cfg.HotKeyMinTxs > 0)
+	}
 
 	ctx := context.Background()
 
