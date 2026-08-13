@@ -171,10 +171,31 @@ func TestMarkdownReporter_PerfSection(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "| Max Execution Ratio | 2.00 |")
 	require.Contains(t, out, "## Hot Conflict Keys")
+	require.Contains(t, out, "Max execution ratio: **2.00**")
 	require.Contains(t, out, "### evm-parallel")
 	require.Contains(t, out, "Execution ratio: **2.00**")
 	require.Contains(t, out, "| acc | `01aa` | 5 | 3 |")
 	require.NotContains(t, out, "### clean", "blocks without hot keys stay out of the section")
+}
+
+func TestMarkdownReporter_PerfRatioUnavailable(t *testing.T) {
+	var buf bytes.Buffer
+	r := report.NewMarkdown(&buf)
+	r.Header("fixtures", 1, 1)
+	// Hot keys present but no execution stats wired: the section's ratio must
+	// read n/a, matching the CLI, instead of a misleading 0.00.
+	r.Block(report.BlockOutcome{
+		Index:       1,
+		Total:       1,
+		FixtureName: "evm-parallel",
+		Verdict:     compare.Match,
+		HotKeys:     []compare.HotKeyStat{{Store: "acc", Key: "01aa", Conflicts: 2, Txs: []int{0, 1}}},
+	})
+	r.Footer(report.Summary{TotalBlocks: 1, OKCount: 1, HotKeyBlocks: 1}, false)
+
+	out := buf.String()
+	require.Contains(t, out, "Max execution ratio: **n/a**")
+	require.NotContains(t, out, "0.00")
 }
 
 func TestMarkdownReporter_PerfSectionAbsentWhenClean(t *testing.T) {

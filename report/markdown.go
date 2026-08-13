@@ -84,8 +84,8 @@ func (r *MarkdownReporter) Footer(s Summary, failOnDivergence bool) {
 
 	if len(perfBlocks) > 0 {
 		r.write("## Hot Conflict Keys\n\n")
-		r.write("Max execution ratio: **%.2f** — blocks with hot keys: %d\n\n",
-			s.MaxExecRatio, s.HotKeyBlocks)
+		r.write("Max execution ratio: **%s** — blocks with hot keys: %d\n\n",
+			formatRatio(s.MaxExecRatio), s.HotKeyBlocks)
 		for _, b := range perfBlocks {
 			r.write("### %s\n\n", b.FixtureName)
 			if b.ExecutionRatio > 0 {
