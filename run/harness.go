@@ -16,6 +16,14 @@ type Executor interface {
 	Close()
 }
 
+// ConflictDetectionSetter is an optional interface for executors that can
+// toggle installation of the probe conflict observer. RunHarness enables it
+// only when hot-key reporting is active (Config.HotKeyMinTxs > 0), so a
+// disabled flag also disables collection, not just display.
+type ConflictDetectionSetter interface {
+	SetConflictDetection(enabled bool)
+}
+
 // StateInitializer is an optional interface for executors that can initialise
 // from an existing snapshot directory rather than from a genesis spec.
 // The executor is responsible for opening application.db handles from
@@ -30,6 +38,13 @@ type Config struct {
 	CorpusDir        string
 	Probes           int
 	FailOnDivergence bool
+
+	// HotKeyMinTxs reports a probe conflict key only when at least this many
+	// distinct transactions re-executed because of it. <= 0 disables hot-key
+	// reporting. Performance diagnostics only — never affects the exit code.
+	// The execution ratio has no threshold: it is always reported when the
+	// probe supplies execution stats.
+	HotKeyMinTxs int
 }
 
 func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep report.Reporter, errOut io.Writer) int {
@@ -39,6 +54,10 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 	}
 
 	rep.Header(cfg.CorpusDir, totalBlocks, cfg.Probes)
+
+	if cd, ok := exec.(ConflictDetectionSetter); ok {
+		cd.SetConflictDetection(cfg.HotKeyMinTxs > 0)
+	}
 
 	ctx := context.Background()
 
@@ -51,6 +70,9 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 		canaryExpected  int
 		canaryMissed    int
 		blockNum        int
+
+		hotKeyBlocks int
+		maxExecRatio float64
 	)
 
 	for _, store := range stores {
@@ -103,15 +125,30 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 			patternTracker.RecordBlock(result.MsgKeys, result.TxWriteSets)
 
 			outcome := report.BlockOutcome{
-				Index:         blockNum,
-				Total:         totalBlocks,
-				FixtureName:   name,
-				IsCanary:      isCanary,
-				Verdict:       result.Verdict,
-				Findings:      result.Findings,
-				OracleTxCodes: result.OracleTxCodes,
+				Index:          blockNum,
+				Total:          totalBlocks,
+				FixtureName:    name,
+				IsCanary:       isCanary,
+				Verdict:        result.Verdict,
+				Findings:       result.Findings,
+				OracleTxCodes:  result.OracleTxCodes,
+				ExecutionRatio: result.ExecutionRatio,
+			}
+			if cfg.HotKeyMinTxs > 0 {
+				for _, hk := range result.HotKeys {
+					if len(hk.Txs) >= cfg.HotKeyMinTxs {
+						outcome.HotKeys = append(outcome.HotKeys, hk)
+					}
+				}
 			}
 			rep.Block(outcome)
+
+			if len(outcome.HotKeys) > 0 {
+				hotKeyBlocks++
+			}
+			if result.ExecutionRatio > maxExecRatio {
+				maxExecRatio = result.ExecutionRatio
+			}
 
 			switch {
 			case isCanary && result.Verdict == compare.Divergence:
@@ -152,6 +189,8 @@ func RunHarness(cfg Config, exec Executor, stores []compare.CorpusStore, rep rep
 		ReporterErrors:  rep.Errors(),
 		Coverage:        tracker.Report(),
 		StatePatterns:   patternTracker.Report(),
+		HotKeyBlocks:    hotKeyBlocks,
+		MaxExecRatio:    maxExecRatio,
 	}
 	rep.Footer(summary, cfg.FailOnDivergence)
 

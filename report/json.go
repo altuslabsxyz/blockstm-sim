@@ -18,21 +18,32 @@ type jsonFinding struct {
 	Probe      string `json:"probe"`
 }
 
+type jsonHotKey struct {
+	Store     string `json:"store"`
+	Key       string `json:"key"`
+	Conflicts int    `json:"conflicts"`
+	Txs       []int  `json:"txs"`
+}
+
 type jsonBlock struct {
-	Index    int           `json:"index"`
-	Fixture  string        `json:"fixture"`
-	IsCanary bool          `json:"is_canary"`
-	Verdict  string        `json:"verdict"`
-	Findings []jsonFinding `json:"findings,omitempty"`
+	Index          int           `json:"index"`
+	Fixture        string        `json:"fixture"`
+	IsCanary       bool          `json:"is_canary"`
+	Verdict        string        `json:"verdict"`
+	Findings       []jsonFinding `json:"findings,omitempty"`
+	HotKeys        []jsonHotKey  `json:"hot_keys,omitempty"`
+	ExecutionRatio float64       `json:"execution_ratio,omitempty"`
 }
 
 type jsonRunSummary struct {
-	TotalBlocks    int `json:"total_blocks"`
-	OK             int `json:"ok"`
-	Divergences    int `json:"divergences"`
-	CanaryExpected int `json:"canary_expected"`
-	CanaryMissed   int `json:"canary_missed"`
-	ExitCode       int `json:"exit_code"`
+	TotalBlocks    int     `json:"total_blocks"`
+	OK             int     `json:"ok"`
+	Divergences    int     `json:"divergences"`
+	CanaryExpected int     `json:"canary_expected"`
+	CanaryMissed   int     `json:"canary_missed"`
+	HotKeyBlocks   int     `json:"hot_key_blocks,omitempty"`
+	MaxExecRatio   float64 `json:"max_execution_ratio,omitempty"`
+	ExitCode       int     `json:"exit_code"`
 }
 
 type jsonRunReport struct {
@@ -65,10 +76,11 @@ func (r *JSONReporter) Header(corpus string, _, probes int) {
 
 func (r *JSONReporter) Block(o BlockOutcome) {
 	jb := jsonBlock{
-		Index:    o.Index,
-		Fixture:  o.FixtureName,
-		IsCanary: o.IsCanary,
-		Verdict:  string(o.Verdict),
+		Index:          o.Index,
+		Fixture:        o.FixtureName,
+		IsCanary:       o.IsCanary,
+		Verdict:        string(o.Verdict),
+		ExecutionRatio: o.ExecutionRatio,
 	}
 	for _, f := range o.Findings {
 		jb.Findings = append(jb.Findings, jsonFinding{
@@ -79,6 +91,14 @@ func (r *JSONReporter) Block(o BlockOutcome) {
 			Dimension:  string(f.Dimension),
 			Oracle:     f.Oracle,
 			Probe:      f.Probe,
+		})
+	}
+	for _, hk := range o.HotKeys {
+		jb.HotKeys = append(jb.HotKeys, jsonHotKey{
+			Store:     hk.Store,
+			Key:       hk.Key,
+			Conflicts: hk.Conflicts,
+			Txs:       hk.Txs,
 		})
 	}
 	r.blocks = append(r.blocks, jb)
@@ -95,6 +115,8 @@ func (r *JSONReporter) Footer(s Summary, failOnDivergence bool) {
 			Divergences:    s.DivergenceCount,
 			CanaryExpected: s.CanaryExpected,
 			CanaryMissed:   s.CanaryMissed,
+			HotKeyBlocks:   s.HotKeyBlocks,
+			MaxExecRatio:   s.MaxExecRatio,
 			ExitCode:       s.ExitCode(failOnDivergence),
 		},
 		Blocks: r.blocks,

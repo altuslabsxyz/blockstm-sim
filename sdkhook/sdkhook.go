@@ -143,6 +143,58 @@ func WrapApp(rawApp any) App {
 	return appWrapFn(rawApp)
 }
 
+// ConflictObserverInstaller installs (fn != nil) or removes (fn == nil) the
+// process-global BlockSTM conflict observer. The chain adapter bridges this to
+// the SDK fork's conflict observer hook, converting the fork's record type
+// into compare.ConflictRecord so blockstm-sim core stays free of fork imports.
+// The observer is global: install it only around a single FinalizeBlock at a
+// time (executors install before the probe run and remove right after).
+type ConflictObserverInstaller func(fn func(compare.ConflictRecord))
+
+var conflictInstaller ConflictObserverInstaller
+
+// RegisterConflictObserverInstaller registers the installer provided by the
+// chain adapter. Panics if called more than once.
+func RegisterConflictObserverInstaller(f ConflictObserverInstaller) {
+	if conflictInstaller != nil {
+		panic("sdkhook: ConflictObserverInstaller already registered")
+	}
+	conflictInstaller = f
+}
+
+// InstallConflictObserver forwards fn to the registered installer. No-op when
+// no installer is registered, so executors may call it unconditionally.
+func InstallConflictObserver(fn func(compare.ConflictRecord)) {
+	if conflictInstaller != nil {
+		conflictInstaller(fn)
+	}
+}
+
+// ExecStatsObserverInstaller installs (fn != nil) or removes (fn == nil) the
+// process-global BlockSTM execution-stats observer. The chain adapter bridges
+// this to the SDK fork's execution-stats observer hook. Same global-sink
+// caveat as ConflictObserverInstaller.
+type ExecStatsObserverInstaller func(fn func(compare.ExecutionStats))
+
+var execStatsInstaller ExecStatsObserverInstaller
+
+// RegisterExecStatsObserverInstaller registers the installer provided by the
+// chain adapter. Panics if called more than once.
+func RegisterExecStatsObserverInstaller(f ExecStatsObserverInstaller) {
+	if execStatsInstaller != nil {
+		panic("sdkhook: ExecStatsObserverInstaller already registered")
+	}
+	execStatsInstaller = f
+}
+
+// InstallExecStatsObserver forwards fn to the registered installer. No-op when
+// no installer is registered, so executors may call it unconditionally.
+func InstallExecStatsObserver(fn func(compare.ExecutionStats)) {
+	if execStatsInstaller != nil {
+		execStatsInstaller(fn)
+	}
+}
+
 // runnerFactory is the registered STMRunnerFactory. Nil until RegisterSTMRunnerFactory
 // is called by the chain adapter's init().
 var runnerFactory STMRunnerFactory

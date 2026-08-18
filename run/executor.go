@@ -200,7 +200,14 @@ type FixtureExecutor struct {
 	// extraRawTxBuilders holds raw-tx builders registered via WithExtraRawTxBuilders.
 	// A raw builder returns fully-encoded signed bytes, bypassing GenSignedMockTx.
 	extraRawTxBuilders map[string]RawTxBuilderFn
+	// conflictDetection gates installation of the probe conflict observer.
+	// Set by RunHarness via SetConflictDetection based on Config.HotKeyMinTxs.
+	conflictDetection bool
 }
+
+// SetConflictDetection toggles probe conflict-observer installation.
+// Implements the run.ConflictDetectionSetter optional interface.
+func (e *FixtureExecutor) SetConflictDetection(enabled bool) { e.conflictDetection = enabled }
 
 // WithSTMOracle configures the oracle to use BlockSTM with more than one worker.
 func WithSTMOracle(workers int) func(*FixtureExecutor) {
@@ -391,6 +398,8 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 	e.oracle.SetLifecycleObserver(oracleObs)
 	e.probe.SetLifecycleObserver(probeObs)
 
+	conflictSink := compare.NewConflictSink()
+
 	result, err := compare.Run(compare.Input{
 		Oracle: e.oracle,
 		Probe:  e.probe,
@@ -417,11 +426,31 @@ func (e *FixtureExecutor) RunBlock(block compare.BlockSpec, height int64) (*comp
 					})
 				}
 			}
+			// Observe only the probe's BlockSTM run: the observers are
+			// process-global and are installed here, after the oracle's
+			// FinalizeBlock has already completed. The conflict observer is
+			// skipped entirely when hot-key reporting is disabled; execution
+			// stats are always collected (the ratio has no threshold).
+			if e.conflictDetection {
+				sdkhook.InstallConflictObserver(conflictSink.RecordConflict)
+			}
+			sdkhook.InstallExecStatsObserver(conflictSink.RecordStats)
 		},
 	})
 
+	sdkhook.InstallConflictObserver(nil)
+	sdkhook.InstallExecStatsObserver(nil)
+
 	e.oracle.SetLifecycleObserver(compare.NoopLifecycleObserver{})
 	e.probe.SetLifecycleObserver(compare.NoopLifecycleObserver{})
+
+	if err == nil {
+		records, stats := conflictSink.Drain()
+		result.HotKeys = compare.AggregateHotKeys(records)
+		if stats != nil {
+			result.ExecutionRatio = stats.Ratio()
+		}
+	}
 
 	if extraPostRunBlockHook != nil {
 		extraPostRunBlockHook()

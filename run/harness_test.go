@@ -300,6 +300,95 @@ func TestHarness_StateInitializer_InitError(t *testing.T) {
 	require.True(t, store.closed, "store.Close() should be called even when InitFromState fails")
 }
 
+func TestHarness_PerfReporting(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "01-test", "", 2)
+
+	exec := &mockExecutor{results: []*compare.Result{
+		{
+			Verdict: compare.Match,
+			HotKeys: []compare.HotKeyStat{
+				// 4 distinct txs → passes HotKeyMinTxs=2
+				{Store: "acc", Key: "01aa", Conflicts: 9, Txs: []int{0, 1, 2, 3}},
+				// 1 distinct tx → filtered out
+				{Store: "bank", Key: "02bb", Conflicts: 1, Txs: []int{2}},
+			},
+			ExecutionRatio: 3.0,
+		},
+		{Verdict: compare.Match, ExecutionRatio: 1.0},
+	}}
+
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	cfg := run.Config{CorpusDir: dir, Probes: 1, HotKeyMinTxs: 2}
+	code := run.RunHarness(cfg, exec, loadStores(t, dir), report.NewCLI(out, errOut), errOut)
+
+	// Perf findings are report-only: exit code stays 0.
+	require.Equal(t, 0, code)
+	got := out.String()
+	// The execution ratio is always reported when available — no threshold.
+	require.Contains(t, got, "exec-ratio 3.00")
+	require.Contains(t, got, "exec-ratio 1.00")
+	require.Contains(t, got, "hot key acc/0x01aa")
+	require.NotContains(t, got, "02bb", "below-threshold key must be filtered")
+	require.Contains(t, got, "Perf  max-exec-ratio=3.00  hot-key-blocks=1")
+}
+
+// mockPerfExecutor wraps mockExecutor and records SetConflictDetection calls.
+type mockPerfExecutor struct {
+	mockExecutor
+	conflictDetectionSet []bool
+}
+
+func (e *mockPerfExecutor) SetConflictDetection(enabled bool) {
+	e.conflictDetectionSet = append(e.conflictDetectionSet, enabled)
+}
+
+func TestHarness_ConflictDetectionEnabled(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "01-test", "", 1)
+
+	// HotKeyMinTxs > 0 → detection enabled on the executor.
+	exec := &mockPerfExecutor{}
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	run.RunHarness(run.Config{CorpusDir: dir, Probes: 1, HotKeyMinTxs: 2}, exec, loadStores(t, dir), report.NewCLI(out, errOut), errOut)
+
+	require.Equal(t, []bool{true}, exec.conflictDetectionSet)
+}
+
+func TestHarness_ConflictDetectionDisabled(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "01-test", "", 1)
+
+	// HotKeyMinTxs <= 0 → detection disabled, so no observer is installed.
+	exec := &mockPerfExecutor{}
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	run.RunHarness(run.Config{CorpusDir: dir, Probes: 1}, exec, loadStores(t, dir), report.NewCLI(out, errOut), errOut)
+
+	require.Equal(t, []bool{false}, exec.conflictDetectionSet)
+}
+
+func TestHarness_HotKeyReportingDisabled(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "01-test", "", 1)
+
+	exec := &mockExecutor{results: []*compare.Result{
+		{
+			Verdict:        compare.Match,
+			HotKeys:        []compare.HotKeyStat{{Store: "acc", Key: "01aa", Conflicts: 9, Txs: []int{0, 1}}},
+			ExecutionRatio: 9.0,
+		},
+	}}
+
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	// HotKeyMinTxs = 0 disables hot-key reporting; the ratio is still reported.
+	cfg := run.Config{CorpusDir: dir, Probes: 1}
+	code := run.RunHarness(cfg, exec, loadStores(t, dir), report.NewCLI(out, errOut), errOut)
+
+	require.Equal(t, 0, code)
+	require.NotContains(t, out.String(), "hot key")
+	require.Contains(t, out.String(), "exec-ratio 9.00")
+}
+
 func TestHarness_StatePatternInFooter(t *testing.T) {
 	dir := t.TempDir()
 	// Two blocks, each with one bank-send tx; distinct write sets → 2 patterns.

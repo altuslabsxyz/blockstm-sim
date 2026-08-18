@@ -31,6 +31,7 @@ func NewCommand() *cobra.Command {
 			probes, _ := cmd.Flags().GetInt("probes")
 			failOnDiv, _ := cmd.Flags().GetBool("fail-on-divergence")
 			format, _ := cmd.Flags().GetString("format")
+			hotKeyMinTxs, _ := cmd.Flags().GetInt("hot-key-min-txs")
 
 			stores, err := compare.LoadCorpusStores(corpus)
 			if err != nil {
@@ -51,6 +52,7 @@ func NewCommand() *cobra.Command {
 				CorpusDir:        corpus,
 				Probes:           probes,
 				FailOnDivergence: failOnDiv,
+				HotKeyMinTxs:     hotKeyMinTxs,
 			}
 
 			code := RunHarness(cfg, newExecutorFn(probes), stores, rep, os.Stderr)
@@ -65,6 +67,7 @@ func NewCommand() *cobra.Command {
 	cmd.Flags().Int("probes", 1, "Number of probe variants")
 	cmd.Flags().Bool("fail-on-divergence", false, "Exit 1 on any non-canary divergence")
 	cmd.Flags().String("format", "text", "Output format: text, json, or markdown")
+	cmd.Flags().Int("hot-key-min-txs", 2, "Report a conflict key when at least this many distinct txs re-executed on it (0 disables; report-only)")
 
 	return cmd
 }
